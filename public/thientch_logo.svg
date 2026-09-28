@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <radialGradient id="bgGrad" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#0d1b2e" />
+      <stop offset="100%" stop-color="#050a12" />
+    </radialGradient>
+
+    <!-- Outer Border Gradient -->
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00D2FF" />
+      <stop offset="50%" stop-color="#0066FF" />
+      <stop offset="100%" stop-color="#00FF88" />
+    </linearGradient>
+
+    <!-- Glowing Tech Blue Gradient for T -->
+    <linearGradient id="techBlueGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#00E5FF" />
+      <stop offset="50%" stop-color="#0077FF" />
+      <stop offset="100%" stop-color="#0044CC" />
+    </linearGradient>
+
+    <!-- Filter for Glow Effects -->
+    <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="glowCyan" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer Rounded Squircle Border -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="12" />
+
+  <!-- Circuit Background Dot Grid -->
+  <g opacity="0.18">
+    <circle cx="100" cy="100" r="3" fill="#00FF88" />
+    <circle cx="140" cy="100" r="3" fill="#00FF88" />
+    <circle cx="180" cy="100" r="3" fill="#00FF88" />
+    <circle cx="220" cy="100" r="3" fill="#00FF88" />
+    <circle cx="260" cy="100" r="3" fill="#00FF88" />
+    <circle cx="300" cy="100" r="3" fill="#00FF88" />
+    <circle cx="340" cy="100" r="3" fill="#00FF88" />
+    <circle cx="380" cy="100" r="3" fill="#00FF88" />
+    <circle cx="412" cy="100" r="3" fill="#00FF88" />
+
+    <circle cx="100" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="140" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="180" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="220" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="260" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="300" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="340" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="380" cy="412" r="3" fill="#00D2FF" />
+    <circle cx="412" cy="412" r="3" fill="#00D2FF" />
+  </g>
+
+  <!-- Circuit Traces Top Left -->
+  <path d="M80 140 H150 L190 190" stroke="#0066FF" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.8" />
+  <circle cx="80" cy="140" r="12" fill="#00FF88" filter="url(#glowGreen)" />
+
+  <!-- Circuit Traces Top Right -->
+  <path d="M432 140 H362 L322 190" stroke="#0066FF" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.8" />
+  <circle cx="432" cy="140" r="12" fill="#00FF88" filter="url(#glowGreen)" />
+
+  <!-- Circuit Traces Bottom -->
+  <path d="M160 390 H100" stroke="#0066FF" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.7" />
+  <circle cx="100" cy="390" r="10" fill="#00D2FF" filter="url(#glowCyan)" />
+
+  <path d="M352 390 H412" stroke="#0066FF" stroke-width="8" stroke-linecap="round" fill="none" opacity="0.7" />
+  <circle cx="412" cy="390" r="10" fill="#00D2FF" filter="url(#glowCyan)" />
+
+  <!-- Code Braces { } -->
+  <!-- Left Brace { -->
+  <path d="M136 200 C116 200 106 220 106 250 C106 270 96 280 81 280 C96 280 106 290 106 310 C106 340 116 360 136 360"
+        stroke="#00D2FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85" filter="url(#glowCyan)" />
+
+  <!-- Right Brace } -->
+  <path d="M376 200 C396 200 406 220 406 250 C406 270 416 280 431 280 C416 280 406 290 406 310 C406 340 396 360 376 360"
+        stroke="#00D2FF" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.85" filter="url(#glowCyan)" />
+
+  <!-- Stylized High-Tech 'T' Body -->
+  <!-- Horizontal Top Bar of T -->
+  <path d="M148 128 H364" stroke="url(#techBlueGrad)" stroke-width="32" stroke-linecap="round" fill="none" />
+
+  <!-- Vertical Stem of T -->
+  <path d="M256 128 V350" stroke="url(#techBlueGrad)" stroke-width="32" stroke-linecap="round" fill="none" />
+
+  <!-- Center Top Glowing Node -->
+  <circle cx="256" cy="128" r="16" fill="#00FF88" filter="url(#glowGreen)" />
+
+  <!-- Verification Checkmark (Neon Matrix Green) -->
+  <path d="M228 300 L278 350 L388 230"
+        stroke="#00FF88" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none" filter="url(#glowGreen)" />
+</svg>

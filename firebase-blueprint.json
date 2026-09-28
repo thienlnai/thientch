@@ -1,0 +1,199 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "Educational institution information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "level": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["code", "name"]
+    },
+    "Class": {
+      "title": "Class",
+      "description": "Class belonging to a school",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "code": { "type": "string" },
+        "name": { "type": "string" },
+        "grade": { "type": "string" },
+        "schoolYear": { "type": "string" },
+        "homeroomTeacher": { "type": "string" },
+        "room": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["schoolId", "code", "name"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Student enrolled in a class",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentCode": { "type": "string" },
+        "fullName": { "type": "string" },
+        "dateOfBirth": { "type": "string" },
+        "gender": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["schoolId", "classId", "studentCode", "fullName", "username", "password"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Admin or Teacher account with access control",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "subjects": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["fullName", "username", "password", "role"]
+    },
+    "Exam": {
+      "title": "Exam",
+      "description": "Standardized exam created by teachers with 1000 score ceiling",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "subject": { "type": "string" },
+        "grade": { "type": "string" },
+        "targetGrades": { "type": "array" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "classIds": { "type": "array" },
+        "durationMinutes": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "passingScore": { "type": "number" },
+        "status": { "type": "string" },
+        "allowReviewAnswers": { "type": "boolean" },
+        "isPracticeTest": { "type": "boolean" },
+        "practiceRandomCount": { "type": "number" },
+        "questions": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["title", "creatorId", "totalScore", "passingScore", "questions"]
+    },
+    "ExamSubmission": {
+      "title": "ExamSubmission",
+      "description": "Exam submission records and scores for students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "examTitle": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentName": { "type": "string" },
+        "studentCode": { "type": "string" },
+        "classId": { "type": "string" },
+        "score": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "passingScore": { "type": "number" },
+        "passed": { "type": "boolean" },
+        "totalQuestions": { "type": "number" },
+        "correctCount": { "type": "number" },
+        "timeSpentSeconds": { "type": "number" },
+        "submittedAt": { "type": "string" },
+        "attemptDate": { "type": "string" },
+        "attemptNumber": { "type": "number" },
+        "violationCount": { "type": "number" },
+        "userAnswers": { "type": "object" },
+        "questionsSnapshot": { "type": "array" }
+      },
+      "required": ["examId", "studentId", "score", "submittedAt"]
+    },
+    "ExamQuestion": {
+      "title": "ExamQuestion",
+      "description": "Individual question belonging to an exam separated into its own table/collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "orderIndex": { "type": "number" },
+        "type": { "type": "string" },
+        "title": { "type": "string" },
+        "mediaType": { "type": "string" },
+        "mediaUrl": { "type": "string" },
+        "explanation": { "type": "string" },
+        "options": { "type": "array" },
+        "correctOptionId": { "type": "string" },
+        "correctOptionIds": { "type": "array" },
+        "matchingPairs": { "type": "array" },
+        "shuffledRightPairs": { "type": "array" },
+        "orderingItems": { "type": "array" },
+        "trueLabel": { "type": "string" },
+        "falseLabel": { "type": "string" },
+        "tfStatements": { "type": "array" },
+        "shuffledTfColumns": { "type": "array" },
+        "hotspotImageUrl": { "type": "string" },
+        "hotspotRegions": { "type": "array" },
+        "fillBlankTemplate": { "type": "string" },
+        "fillBlankItems": { "type": "array" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["examId", "type", "title"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of schools managed in the exam portal"
+    },
+    "/classes/{classId}": {
+      "schema": "Class",
+      "description": "Collection of classes belonging to schools"
+    },
+    "/students/{studentId}": {
+      "schema": "Student",
+      "description": "Collection of student accounts and profiles"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of teachers and admin accounts"
+    },
+    "/exams/{examId}": {
+      "schema": "Exam",
+      "description": "Collection of exams and quizzes"
+    },
+    "/exam_submissions/{submissionId}": {
+      "schema": "ExamSubmission",
+      "description": "Collection of student exam submission attempts"
+    },
+    "/exam_questions/{questionId}": {
+      "schema": "ExamQuestion",
+      "description": "Collection of individual exam questions separated from exams"
+    },
+    "/exams/{examId}/questions/{questionId}": {
+      "schema": "ExamQuestion",
+      "description": "Subcollection of exam questions for an exam"
+    }
+  }
+}

@@ -1,0 +1,430 @@
+{
+  "system_info": {
+    "app_name": "Hệ thống Khảo thí & Luyện thi ThienTCH",
+    "version": "2.0.0",
+    "database_type": "Supabase PostgreSQL (Multi-Table Architecture)",
+    "storage_bucket": "exam-images",
+    "default_admin_password": "8653564@Thien",
+    "exported_at": "2026-09-28T01:25:00Z"
+  },
+  "tables": {
+    "schools": [
+      {
+        "id": "school_thientch_01",
+        "code": "THPT-TCH",
+        "name": "Trường THPT Chuyên Khảo Thí ThienTCH",
+        "address": "Số 123 Đường Giáo Dục, TP. Hồ Chí Minh",
+        "phone": "0901234567",
+        "email": "contact@thientch.edu.vn",
+        "level": "highschool"
+      }
+    ],
+    "classes": [
+      {
+        "id": "class_10a1",
+        "schoolId": "school_thientch_01",
+        "code": "10A1",
+        "name": "Lớp 10A1 - Chuyên Tin",
+        "grade": "10",
+        "schoolYear": "2025-2026",
+        "homeroomTeacher": "Thầy Lê Ngọc Thiện",
+        "room": "Phòng Máy 01"
+      },
+      {
+        "id": "class_11a1",
+        "schoolId": "school_thientch_01",
+        "code": "11A1",
+        "name": "Lớp 11A1 - Tin học ứng dụng",
+        "grade": "11",
+        "schoolYear": "2025-2026",
+        "homeroomTeacher": "Cô Nguyễn Thị Mai",
+        "room": "Phòng Máy 02"
+      },
+      {
+        "id": "class_12a1",
+        "schoolId": "school_thientch_01",
+        "code": "12A1",
+        "name": "Lớp 12A1 - Luyện thi Đại học",
+        "grade": "12",
+        "schoolYear": "2025-2026",
+        "homeroomTeacher": "Thầy Trần Văn An",
+        "room": "Phòng Máy 03"
+      }
+    ],
+    "users": [
+      {
+        "id": "usr_admin_01",
+        "fullName": "Quản Trị Viên Hệ Thống",
+        "username": "admin",
+        "password": "8653564@Thien",
+        "email": "thienln.ic3@gmail.com",
+        "phone": "0901234567",
+        "subjects": "Tất cả các môn",
+        "schoolId": "school_thientch_01",
+        "classIds": [],
+        "role": "admin",
+        "status": "active"
+      },
+      {
+        "id": "usr_teacher_01",
+        "fullName": "Thầy Lê Ngọc Thiện",
+        "username": "giaovien",
+        "password": "8653564@Thien",
+        "email": "teacher@thientch.edu.vn",
+        "phone": "0912345678",
+        "subjects": "Tin học",
+        "schoolId": "school_thientch_01",
+        "classIds": ["class_10a1", "class_11a1", "class_12a1"],
+        "role": "teacher",
+        "status": "active"
+      }
+    ],
+    "students": [
+      {
+        "id": "std_001",
+        "schoolId": "school_thientch_01",
+        "classId": "class_10a1",
+        "studentCode": "HS1001",
+        "fullName": "Nguyễn Văn An",
+        "dateOfBirth": "2010-05-15",
+        "gender": "male",
+        "username": "hs1001",
+        "password": "123",
+        "status": "active",
+        "note": "Học sinh tiêu biểu"
+      },
+      {
+        "id": "std_002",
+        "schoolId": "school_thientch_01",
+        "classId": "class_10a1",
+        "studentCode": "HS1002",
+        "fullName": "Trần Thị Bích",
+        "dateOfBirth": "2010-08-20",
+        "gender": "female",
+        "username": "hs1002",
+        "password": "123",
+        "status": "active",
+        "note": ""
+      }
+    ],
+    "exams": [
+      {
+        "id": "exam_sample_tin10",
+        "title": "Kiểm tra Khảo sát Tin học 10 - Kiến trúc Đa Bảng",
+        "description": "Đề thi mẫu tổng hợp đầy đủ các dạng câu hỏi: Chọn 1 đáp án, Chọn nhiều đáp án, Đúng/Sai, Ghép nối, Điền khuyết, Sắp xếp thứ tự và Điểm nóng Hotspot.",
+        "subject": "Tin học",
+        "grade": "Khối 10",
+        "creatorId": "usr_admin_01",
+        "creatorName": "Quản Trị Viên",
+        "classIds": ["class_10a1"],
+        "durationMinutes": 45,
+        "totalScore": 1000,
+        "passingScore": 700,
+        "status": "published",
+        "allowReviewAnswers": true,
+        "isPracticeTest": false,
+        "practiceRandomCount": 0,
+        "totalQuestions": 6,
+        "questionIds": ["q_sample_01", "q_sample_02", "q_sample_03", "q_sample_04", "q_sample_05", "q_sample_06"]
+      }
+    ],
+    "exam_questions": [
+      {
+        "id": "q_sample_01",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "type": "single_choice",
+        "title": "Thiết bị nào sau đây là bộ phận xử lý trung tâm của máy tính?",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "CPU (Central Processing Unit) là bộ xử lý trung tâm thực hiện các lệnh của chương trình máy tính.",
+        "correctOptionId": "opt_sample_01_a",
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      },
+      {
+        "id": "q_sample_02",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "type": "multiple_choice",
+        "title": "Những thiết bị nào sau đây là thiết bị ngoại vi vào (Input device)? (Chọn tất cả đáp án đúng)",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "Bàn phím, Chuột và Máy quét (Scanner) là các thiết bị đưa dữ liệu vào máy tính.",
+        "correctOptionId": null,
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      },
+      {
+        "id": "q_sample_03",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "type": "true_false",
+        "title": "Hãy xác định tính Đúng hoặc Sai cho mỗi nhận định về mạng máy tính sau đây:",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "Mạng LAN là mạng cục bộ phạm vi hẹp. Internet là mạng toàn cầu kết nối hàng triệu máy tính.",
+        "correctOptionId": null,
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      },
+      {
+        "id": "q_sample_04",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 3,
+        "type": "matching",
+        "title": "Hãy ghép nối khái niệm ở cột bên trái với định nghĩa phù hợp ở cột bên phải:",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "RAM là bộ nhớ truy xuất ngẫu nhiên, ROM là bộ nhớ chỉ đọc, SSD là ổ đĩa thể rắn.",
+        "correctOptionId": null,
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      },
+      {
+        "id": "q_sample_05",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 4,
+        "type": "ordering",
+        "title": "Hãy sắp xếp các bước sau theo đúng quy trình khởi động của máy tính:",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "Quy trình: Bật nguồn -> POST (Kiểm tra phần cứng) -> Nạp BIOS/UEFI -> Tải Hệ điều hành vào RAM.",
+        "correctOptionId": null,
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      },
+      {
+        "id": "q_sample_06",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 5,
+        "type": "fill_in_blank",
+        "title": "Chọn từ thích hợp điền vào chỗ trống để hoàn thành câu:",
+        "fillBlankTemplate": "Bộ nhớ [b1] là bộ nhớ tạm thời, dữ liệu sẽ bị mất khi mất điện; trong khi đó bộ nhớ [b2] lưu trữ dữ liệu vĩnh viễn.",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "RAM mất dữ liệu khi mất nguồn điện. ROM/Ổ cứng lưu trữ dữ liệu bền vững.",
+        "correctOptionId": null,
+        "trueLabel": "Đúng",
+        "falseLabel": "Sai"
+      }
+    ],
+    "question_options": [
+      {
+        "id": "opt_sample_01_a",
+        "questionId": "q_sample_01",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "text": "CPU",
+        "imageUrl": null,
+        "isCorrect": true
+      },
+      {
+        "id": "opt_sample_01_b",
+        "questionId": "q_sample_01",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "text": "RAM",
+        "imageUrl": null,
+        "isCorrect": false
+      },
+      {
+        "id": "opt_sample_01_c",
+        "questionId": "q_sample_01",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "text": "Hard Disk Drive (HDD)",
+        "imageUrl": null,
+        "isCorrect": false
+      },
+      {
+        "id": "opt_sample_01_d",
+        "questionId": "q_sample_01",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 3,
+        "text": "Nguồn (Power Supply)",
+        "imageUrl": null,
+        "isCorrect": false
+      },
+      {
+        "id": "opt_sample_02_a",
+        "questionId": "q_sample_02",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "text": "Bàn phím (Keyboard)",
+        "imageUrl": null,
+        "isCorrect": true
+      },
+      {
+        "id": "opt_sample_02_b",
+        "questionId": "q_sample_02",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "text": "Chuột máy tính (Mouse)",
+        "imageUrl": null,
+        "isCorrect": true
+      },
+      {
+        "id": "opt_sample_02_c",
+        "questionId": "q_sample_02",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "text": "Màn hình (Monitor)",
+        "imageUrl": null,
+        "isCorrect": false
+      },
+      {
+        "id": "opt_sample_02_d",
+        "questionId": "q_sample_02",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 3,
+        "text": "Máy quét (Scanner)",
+        "imageUrl": null,
+        "isCorrect": true
+      }
+    ],
+    "question_matching_pairs": [
+      {
+        "id": "pair_01",
+        "questionId": "q_sample_04",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "leftText": "RAM",
+        "leftImageUrl": null,
+        "rightText": "Bộ nhớ truy cập ngẫu nhiên, dữ liệu mất khi tắt nguồn",
+        "rightImageUrl": null
+      },
+      {
+        "id": "pair_02",
+        "questionId": "q_sample_04",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "leftText": "ROM",
+        "leftImageUrl": null,
+        "rightText": "Bộ nhớ chỉ đọc, chứa các chỉ dẫn khởi động cơ bản",
+        "rightImageUrl": null
+      },
+      {
+        "id": "pair_03",
+        "questionId": "q_sample_04",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "leftText": "SSD",
+        "leftImageUrl": null,
+        "rightText": "Ổ cứng thể rắn tốc độ đọc ghi cực nhanh",
+        "rightImageUrl": null
+      }
+    ],
+    "question_ordering_items": [
+      {
+        "id": "ord_01",
+        "questionId": "q_sample_05",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "text": "1. Nhấn nút Bật nguồn máy tính",
+        "imageUrl": null
+      },
+      {
+        "id": "ord_02",
+        "questionId": "q_sample_05",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "text": "2. POST (Kiểm tra phần cứng tự động)",
+        "imageUrl": null
+      },
+      {
+        "id": "ord_03",
+        "questionId": "q_sample_05",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "text": "3. BIOS/UEFI định vị thiết bị khởi động",
+        "imageUrl": null
+      },
+      {
+        "id": "ord_04",
+        "questionId": "q_sample_05",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 3,
+        "text": "4. Nạp Hệ điều hành vào bộ nhớ RAM",
+        "imageUrl": null
+      }
+    ],
+    "question_tf_statements": [
+      {
+        "id": "tf_01",
+        "questionId": "q_sample_03",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "statement": "Mạng LAN có phạm vi địa lý toàn cầu.",
+        "isTrue": false
+      },
+      {
+        "id": "tf_02",
+        "questionId": "q_sample_03",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "statement": "Địa chỉ IP là định danh duy nhất cho thiết bị trong mạng.",
+        "isTrue": true
+      },
+      {
+        "id": "tf_03",
+        "questionId": "q_sample_03",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 2,
+        "statement": "Tường lửa (Firewall) giúp ngăn chặn các truy cập trái phép từ bên ngoài.",
+        "isTrue": true
+      }
+    ],
+    "question_fill_blank_items": [
+      {
+        "id": "fb_01",
+        "questionId": "q_sample_06",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 0,
+        "placeholderCode": "[b1]",
+        "options": ["RAM", "ROM", "SSD", "HDD"],
+        "correctAnswer": "RAM"
+      },
+      {
+        "id": "fb_02",
+        "questionId": "q_sample_06",
+        "examId": "exam_sample_tin10",
+        "orderIndex": 1,
+        "placeholderCode": "[b2]",
+        "options": ["ROM", "RAM", "Cache", "Register"],
+        "correctAnswer": "ROM"
+      }
+    ],
+    "question_bank": [
+      {
+        "id": "bank_q_01",
+        "sourceExamId": "exam_sample_tin10",
+        "subject": "Tin học",
+        "grade": "10",
+        "type": "single_choice",
+        "title": "Thiết bị nào sau đây là bộ phận xử lý trung tâm của máy tính?",
+        "mediaType": "none",
+        "mediaUrl": null,
+        "explanation": "CPU (Central Processing Unit) là bộ xử lý trung tâm.",
+        "correctOptionId": "opt_sample_01_a",
+        "options": [
+          { "id": "opt_sample_01_a", "text": "CPU", "isCorrect": true },
+          { "id": "opt_sample_01_b", "text": "RAM", "isCorrect": false },
+          { "id": "opt_sample_01_c", "text": "Hard Disk Drive (HDD)", "isCorrect": false },
+          { "id": "opt_sample_01_d", "text": "Nguồn (Power Supply)", "isCorrect": false }
+        ]
+      }
+    ],
+    "submissions": [],
+    "audit_logs": [
+      {
+        "id": "log_init_01",
+        "action": "INIT_SYSTEM",
+        "actor": "admin",
+        "details": {
+          "message": "Khởi tạo hệ thống cơ sở dữ liệu Supabase"
+        }
+      }
+    ]
+  }
+}
