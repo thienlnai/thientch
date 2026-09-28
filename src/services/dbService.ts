@@ -2184,7 +2184,6 @@ export async function addExam(data: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>
     // 2. Lưu chi tiết câu hỏi sang các bảng con
     if (processedQuestions.length > 0) {
       await saveExamQuestionsToMultiTables(examId, processedQuestions);
-<<<<<<< HEAD
       // 3. Tự động lưu vào bảng question_bank để đọc ngân hàng câu hỏi
       await saveQuestionsToBank(processedQuestions, {
         sourceExamId: examId,
@@ -2194,8 +2193,6 @@ export async function addExam(data: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>
         creatorId: newExam.creatorId,
         creatorName: newExam.creatorName,
       });
-=======
->>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
     }
   }
 
@@ -2233,7 +2230,6 @@ export async function updateExam(id: string, data: Partial<Exam>): Promise<void>
     await safeDbUpdate(EXAMS_TABLE, updatedPayload, 'id', id);
     if (processedQuestions && processedQuestions.length > 0) {
       await saveExamQuestionsToMultiTables(id, processedQuestions);
-<<<<<<< HEAD
       // Đồng thời cập nhật vào question_bank
       await saveQuestionsToBank(processedQuestions, {
         sourceExamId: id,
@@ -2243,8 +2239,6 @@ export async function updateExam(id: string, data: Partial<Exam>): Promise<void>
         creatorId: updatedPayload.creatorId || data.creatorId,
         creatorName: updatedPayload.creatorName || data.creatorName,
       });
-=======
->>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
     }
   }
 }
@@ -2255,20 +2249,8 @@ export async function deleteExam(id: string): Promise<void> {
 
   if (isConfigured) {
     try {
-<<<<<<< HEAD
       // Yêu cầu: Khi giáo viên xóa đề thi KHÔNG xóa chi tiết câu hỏi và ngân hàng câu hỏi.
       // Chỉ xóa bản ghi đề thi trong bảng exams:
-=======
-      // Xóa câu hỏi ở các bảng con
-      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE examId = ?`, [id]);
-      // Xóa đề thi
->>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
       await tursoExecute(`DELETE FROM "${EXAMS_TABLE}" WHERE id = ?`, [id]);
     } catch (err) {
       console.warn('deleteExam error:', err);
@@ -2285,18 +2267,8 @@ export async function deleteMultipleExams(ids: string[]): Promise<number> {
   if (isConfigured) {
     try {
       const placeholders = ids.map(() => '?').join(', ');
-<<<<<<< HEAD
       // Yêu cầu: Khi giáo viên xóa đề thi KHÔNG xóa chi tiết câu hỏi và ngân hàng câu hỏi.
       // Chỉ xóa bản ghi đề thi trong bảng exams:
-=======
-      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE examId IN (${placeholders})`, ids);
->>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
       await tursoExecute(`DELETE FROM "${EXAMS_TABLE}" WHERE id IN (${placeholders})`, ids);
     } catch (err) {
       console.warn('deleteMultipleExams error:', err);
@@ -2305,7 +2277,6 @@ export async function deleteMultipleExams(ids: string[]): Promise<number> {
   return ids.length;
 }
 
-<<<<<<< HEAD
 /**
  * Cho phép Admin xóa hoàn toàn câu hỏi khỏi database (exam_questions, question_bank và các bảng con)
  */
@@ -2403,8 +2374,6 @@ export async function bulkDeleteQuestionsFromDatabase(questionIds: string[]): Pr
   return questionIds.length;
 }
 
-=======
->>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
 export async function mergeExams(
   sourceExamsOrIds: Exam[] | string[],
   newTitle: string,
