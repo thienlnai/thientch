@@ -249,6 +249,19 @@ export function normalizeUser(row: any): UserAccount {
     phone: row.phone ? String(row.phone) : undefined,
     subjects: row.subjects ? String(row.subjects) : undefined,
     schoolId: row.schoolId || row.school_id || row.schoolid || undefined,
+    schoolIds: Array.isArray(row.schoolIds)
+      ? row.schoolIds
+      : typeof row.schoolIds === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(row.schoolIds);
+          } catch {
+            return [];
+          }
+        })()
+      : row.schoolId
+      ? [row.schoolId]
+      : [],
     classIds: Array.isArray(classIds) ? classIds : [],
     role: row.role === 'admin' ? 'admin' : 'teacher',
     status: row.status === 'suspended' ? 'suspended' : 'active',
@@ -280,6 +293,10 @@ export function toDbUserRow(u: any, isPartial = false): any {
   if (u.subjects !== undefined) row.subjects = u.subjects || null;
   if (u.schoolId !== undefined || u.school_id !== undefined) {
     row.schoolId = (u.schoolId ?? u.school_id) || null;
+  }
+  if (u.schoolIds !== undefined) {
+    const rawSchoolIds = u.schoolIds ?? [];
+    row.schoolIds = typeof rawSchoolIds === 'string' ? rawSchoolIds : JSON.stringify(rawSchoolIds);
   }
   if (u.classIds !== undefined || u.class_ids !== undefined) {
     const rawClassIds = u.classIds ?? u.class_ids ?? [];

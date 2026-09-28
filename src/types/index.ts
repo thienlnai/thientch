@@ -50,6 +50,7 @@ export interface UserAccount {
   phone?: string;
   subjects?: string;
   schoolId?: string; // Trường được phân công công tác
+  schoolIds?: string[]; // Danh sách các trường được phân công phụ trách giảng dạy
   classIds?: string[]; // Danh sách các lớp giảng dạy / phụ trách
   role: UserRole;
   status: 'active' | 'suspended';

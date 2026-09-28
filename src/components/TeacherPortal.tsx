@@ -52,7 +52,8 @@ import {
   LayoutGrid,
   List,
   UserCheck,
-  GraduationCap
+  GraduationCap,
+  School as SchoolIcon
 } from 'lucide-react';
 import { 
   addStudent, 
@@ -134,6 +135,53 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
     () => new Set(assignedClasses.map((c) => c.id)),
     [assignedClasses]
   );
+
+  // ================= 1.1. PHÂN NHÓM LỚP HỌC THEO TRƯỜNG ĐƯỢC PHÂN CÔNG =================
+  const teacherSchools = useMemo(() => {
+    const schoolMap = new Map<string, { school: School | null; classes: SchoolClass[]; studentCount: number }>();
+
+    // 1. Khởi tạo các trường giáo viên được gán trực tiếp qua teacher.schoolId / teacher.schoolIds
+    const explicitSchoolIds = new Set<string>();
+    if (teacher.schoolId) explicitSchoolIds.add(teacher.schoolId);
+    if (Array.isArray(teacher.schoolIds)) {
+      teacher.schoolIds.forEach((id: string) => explicitSchoolIds.add(id));
+    }
+    explicitSchoolIds.forEach((sId) => {
+      if (sId && !schoolMap.has(sId)) {
+        const found = schools.find((s) => s.id === sId) || null;
+        schoolMap.set(sId, { school: found, classes: [], studentCount: 0 });
+      }
+    });
+
+    // 2. Gom tất cả các lớp của giáo viên vào từng trường tương ứng
+    assignedClasses.forEach((cls) => {
+      const sId = cls.schoolId || 'unassigned';
+      if (!schoolMap.has(sId)) {
+        const found = schools.find((s) => s.id === sId) || null;
+        schoolMap.set(sId, { school: found, classes: [], studentCount: 0 });
+      }
+      schoolMap.get(sId)!.classes.push(cls);
+    });
+
+    // 3. Đếm sĩ số học sinh cho từng trường
+    schoolMap.forEach((entry) => {
+      const classIdSet = new Set(entry.classes.map((c) => c.id));
+      entry.studentCount = students.filter((s) => s.classId && classIdSet.has(s.classId)).length;
+    });
+
+    return Array.from(schoolMap.entries()).map(([sId, entry]) => ({
+      schoolId: sId,
+      school: entry.school,
+      schoolName: entry.school ? entry.school.name : (sId === 'unassigned' ? 'Cơ sở / Trường chưa phân loại' : `Trường (${sId})`),
+      schoolCode: entry.school?.code || '',
+      classes: entry.classes,
+      studentCount: entry.studentCount,
+    })).sort((a, b) => b.classes.length - a.classes.length);
+  }, [assignedClasses, schools, students, teacher.schoolId, teacher.schoolIds]);
+
+  // Bộ lọc trường học trong tab Lớp học
+  const [schoolFilterForClasses, setSchoolFilterForClasses] = useState<string>('all');
+  const [classSearchInClassesTab, setClassSearchInClassesTab] = useState<string>('');
 
   // Học sinh thuộc các lớp được phân công
   const assignedStudents = useMemo(() => {
@@ -1327,12 +1375,29 @@ NOTIFY pgrst, 'reload schema';`;
                     onChange={(e) => setSelectedClassId(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
                   >
-                    {assignedClasses.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.code})
-                      </option>
+                    {teacherSchools.map((ts) => (
+                      <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
+                        {ts.classes.map((c) => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.code})
+                          </option>
+                        ))}
+                      </optgroup>
                     ))}
                   </select>
+                  {(() => {
+                    const curClass = assignedClasses.find((c) => c.id === selectedClassId);
+                    const curSchool = schools.find((s) => s.id === curClass?.schoolId);
+                    if (curSchool) {
+                      return (
+                        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-indigo-700">
+                          <SchoolIcon className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="truncate">Thuộc trường: {curSchool.name}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
 
                 <div>
@@ -1633,10 +1698,14 @@ NOTIFY pgrst, 'reload schema';`;
                       className="px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="all">Tất cả các lớp phụ trách</option>
-                      {assignedClasses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.code})
-                        </option>
+                      {teacherSchools.map((ts) => (
+                        <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
+                          {ts.classes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.code})
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
 
@@ -2236,10 +2305,14 @@ NOTIFY pgrst, 'reload schema';`;
                       className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
                     >
                       <option value="all">-- Tất cả các lớp phụ trách --</option>
-                      {assignedClasses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.code})
-                        </option>
+                      {teacherSchools.map((ts) => (
+                        <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
+                          {ts.classes.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({c.code})
+                            </option>
+                          ))}
+                        </optgroup>
                       ))}
                     </select>
                   </div>
@@ -2726,66 +2799,332 @@ NOTIFY pgrst, 'reload schema';`;
             </div>
           )}
 
-          {/* ================= TAB 4: LỚP ĐƯỢC PHÂN CÔNG ================= */}
+          {/* ================= TAB 4: PHÂN LỚP THEO TRƯỜNG ĐƯỢC PHÂN CÔNG ================= */}
           {activeTab === 'classes' && (
-            <div className="space-y-6">
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
-                <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-indigo-600" />
-                  <span>Danh Sách Lớp Học Được Admin Phân Công ({assignedClasses.length})</span>
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Tài khoản giáo viên chỉ có quyền xem, quản lý học sinh và tạo bài thi cho các lớp học này.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {paginatedClasses.map((cls) => {
-                  const studentCount = students.filter((s) => s.classId === cls.id).length;
-                  return (
-                    <div
-                      key={cls.id}
-                      className="bg-white rounded-3xl border border-slate-200 p-5 shadow-xs space-y-3"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="px-3 py-1 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-700">
-                          {cls.code}
-                        </span>
-                        <span className="text-xs text-slate-400 font-mono">
-                          Niên khóa: {cls.schoolYear}
-                        </span>
-                      </div>
-                      <h4 className="font-bold text-base text-slate-900">{cls.name}</h4>
-                      <div className="text-xs text-slate-500 space-y-1">
-                        <div>Khối: <strong>{cls.grade}</strong></div>
-                        <div>Phòng học: <strong>{cls.room || 'Phòng học chuyên đề IT'}</strong></div>
-                        <div>Sĩ số hiện tại: <strong className="text-indigo-600">{studentCount} học sinh</strong></div>
-                      </div>
-                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedClassId(cls.id);
-                            setActiveTab('students');
-                          }}
-                          className="text-xs font-bold text-indigo-600 hover:underline cursor-pointer"
-                        >
-                          Xem danh sách học sinh ➔
-                        </button>
-                      </div>
+            <div className="space-y-6 animate-in fade-in">
+              {/* Header Box */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                      <SchoolIcon className="w-5 h-5" />
                     </div>
-                  );
-                })}
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                        <span>Phân Lớp Theo Trường Được Phân Công</span>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold font-mono">
+                          {assignedClasses.length} lớp học
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Tài khoản giáo viên được phân công giảng dạy tại <strong>{teacherSchools.length} trường</strong>. Các lớp học được phân chia và hiển thị chi tiết theo từng cơ sở trường học.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* KPI Badges */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1.5">
+                    <SchoolIcon className="w-4 h-4 text-purple-600" />
+                    <span>{teacherSchools.length} Trường Phụ Trách</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-bold flex items-center gap-1.5">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span>{assignedClasses.length} Lớp Giảng Dạy</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <span>{assignedStudents.length} Học Sinh</span>
+                  </div>
+                </div>
               </div>
 
-              <Pagination
-                currentPage={currentClassesPage}
-                totalItems={assignedClasses.length}
-                pageSize={10}
-                onPageChange={setClassesPage}
-                itemName="lớp học"
-                className="bg-white rounded-2xl border border-slate-200"
-              />
+              {/* Filter Bar: Tìm kiếm lớp & Tabs chọn trường */}
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                  {/* Search class input */}
+                  <div className="w-full sm:w-80 relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={classSearchInClassesTab}
+                      onChange={(e) => setClassSearchInClassesTab(e.target.value)}
+                      placeholder="Tìm theo tên lớp, mã lớp, khối..."
+                      className="w-full pl-9 pr-8 py-2 text-xs font-semibold rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                    />
+                    {classSearchInClassesTab && (
+                      <button
+                        type="button"
+                        onClick={() => setClassSearchInClassesTab('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <span className="text-xs text-slate-500 font-medium self-start sm:self-auto">
+                    Hiển thị danh sách lớp nhóm theo từng trường
+                  </span>
+                </div>
+
+                {/* School Filter Tabs */}
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setSchoolFilterForClasses('all')}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                      schoolFilterForClasses === 'all'
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    <span>Tất Cả Các Trường</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      schoolFilterForClasses === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {assignedClasses.length}
+                    </span>
+                  </button>
+
+                  {teacherSchools.map((ts) => {
+                    const isSelected = schoolFilterForClasses === ts.schoolId;
+                    return (
+                      <button
+                        key={ts.schoolId}
+                        type="button"
+                        onClick={() => setSchoolFilterForClasses(ts.schoolId)}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isSelected
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        <SchoolIcon className="w-3.5 h-3.5" />
+                        <span className="max-w-[200px] truncate">{ts.schoolName}</span>
+                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {ts.classes.length} lớp
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Danh Sách Trường và Lớp Phân Bổ */}
+              <div className="space-y-6">
+                {teacherSchools
+                  .filter((ts) => schoolFilterForClasses === 'all' || ts.schoolId === schoolFilterForClasses)
+                  .map((ts, schoolIdx) => {
+                    // Lọc lớp theo từ khóa tìm kiếm nếu có
+                    const filteredClassesInSchool = ts.classes.filter((c) => {
+                      if (!classSearchInClassesTab.trim()) return true;
+                      const q = classSearchInClassesTab.toLowerCase();
+                      return (
+                        c.name.toLowerCase().includes(q) ||
+                        c.code.toLowerCase().includes(q) ||
+                        (c.grade && c.grade.toLowerCase().includes(q))
+                      );
+                    });
+
+                    if (classSearchInClassesTab.trim() && filteredClassesInSchool.length === 0) {
+                      return null;
+                    }
+
+                    return (
+                      <div
+                        key={ts.schoolId}
+                        className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden transition-all"
+                      >
+                        {/* School Section Banner */}
+                        <div className="p-5 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-white border-b border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0 mt-0.5">
+                              <SchoolIcon className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
+                                  #{schoolIdx + 1}
+                                </span>
+                                <h4 className="text-base font-extrabold text-slate-900 tracking-tight">
+                                  {ts.schoolName}
+                                </h4>
+                                {ts.schoolCode && (
+                                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                                    {ts.schoolCode}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
+                                {ts.school?.address && (
+                                  <span>Địa chỉ: <strong className="text-slate-700">{ts.school.address}</strong></span>
+                                )}
+                                {ts.school?.phone && (
+                                  <span>SĐT: <strong className="text-slate-700">{ts.school.phone}</strong></span>
+                                )}
+                                <span>Phân công giảng dạy: <strong className="text-indigo-700">{ts.classes.length} lớp ({ts.classes.map(c => c.name).join(', ')})</strong></span>
+                                <span>Tổng sĩ số: <strong className="text-emerald-700">{ts.studentCount} học sinh</strong></span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Quick School Actions */}
+                          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
+                            {ts.classes.length > 0 && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedClassId(ts.classes[0].id);
+                                    setActiveTab('students');
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Users className="w-3.5 h-3.5" />
+                                  <span>Xem học sinh trường này</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSingleStudentClassId(ts.classes[0].id);
+                                    setIsAddSingleStudentModalOpen(true);
+                                  }}
+                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                  <span>Thêm HS</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Classes Grid for this School */}
+                        <div className="p-5 bg-slate-50/40">
+                          {filteredClassesInSchool.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {filteredClassesInSchool.map((cls) => {
+                                const classStudentCount = students.filter((s) => s.classId === cls.id).length;
+                                return (
+                                  <div
+                                    key={cls.id}
+                                    className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all space-y-3 group"
+                                  >
+                                    <div className="flex items-center justify-between">
+                                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                        {cls.code}
+                                      </span>
+                                      <span className="text-[11px] text-slate-400 font-mono">
+                                        NK: {cls.schoolYear}
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <h5 className="font-extrabold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
+                                        {cls.name}
+                                      </h5>
+                                      <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
+                                        <SchoolIcon className="w-3 h-3 text-slate-400" />
+                                        <span className="truncate">{ts.schoolName}</span>
+                                      </span>
+                                    </div>
+
+                                    <div className="text-xs text-slate-600 space-y-1 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Khối lớp:</span>
+                                        <strong>{cls.grade}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Phòng học:</span>
+                                        <strong className="truncate max-w-[140px]">{cls.room || 'Phòng học chuyên đề'}</strong>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Giáo viên CN:</span>
+                                        <strong className="truncate max-w-[140px]">{cls.homeroomTeacher || 'Chưa phân công'}</strong>
+                                      </div>
+                                      <div className="flex justify-between pt-1 border-t border-slate-200/60">
+                                        <span className="text-slate-500 font-medium">Sĩ số học sinh:</span>
+                                        <strong className="text-indigo-600 font-bold">{classStudentCount} học sinh</strong>
+                                      </div>
+                                    </div>
+
+                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedClassId(cls.id);
+                                          setActiveTab('students');
+                                        }}
+                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer flex items-center gap-1"
+                                      >
+                                        <span>Danh sách học sinh</span>
+                                        <span>➔</span>
+                                      </button>
+
+                                      <div className="flex items-center gap-1">
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSingleStudentClassId(cls.id);
+                                            setIsAddSingleStudentModalOpen(true);
+                                          }}
+                                          className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                          title="Thêm 1 học sinh vào lớp này"
+                                        >
+                                          <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setExcelClassId(cls.id);
+                                            setIsAddExcelModalOpen(true);
+                                          }}
+                                          className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
+                                          title="Nhập danh sách học sinh bằng Excel"
+                                        >
+                                          <FileSpreadsheet className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="py-6 text-center text-slate-400 text-xs">
+                              Không tìm thấy lớp học nào thuộc trường này phù hợp với từ khóa "{classSearchInClassesTab}".
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                {/* Khi không có trường nào phù hợp */}
+                {teacherSchools.filter((ts) => schoolFilterForClasses === 'all' || ts.schoolId === schoolFilterForClasses).length === 0 && (
+                  <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
+                    <SchoolIcon className="w-12 h-12 text-slate-300 mx-auto" />
+                    <h4 className="font-bold text-base text-slate-700">Không tìm thấy lớp học nào</h4>
+                    <p className="text-xs text-slate-500">
+                      Hãy thử đổi từ khóa tìm kiếm hoặc chọn "Tất Cả Các Trường".
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSchoolFilterForClasses('all');
+                        setClassSearchInClassesTab('');
+                      }}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors cursor-pointer"
+                    >
+                      Đặt Lại Bộ Lọc
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </main>
@@ -2820,10 +3159,14 @@ NOTIFY pgrst, 'reload schema';`;
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
                   required
                 >
-                  {assignedClasses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </option>
+                  {teacherSchools.map((ts) => (
+                    <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
+                      {ts.classes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>
@@ -2950,10 +3293,14 @@ NOTIFY pgrst, 'reload schema';`;
                   }}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-emerald-500"
                 >
-                  {assignedClasses.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.code})
-                    </option>
+                  {teacherSchools.map((ts) => (
+                    <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
+                      {ts.classes.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name} ({c.code})
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </div>

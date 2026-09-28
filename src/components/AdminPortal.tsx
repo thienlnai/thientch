@@ -661,11 +661,11 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   const handleOpenUserModal = (u?: UserAccount | null) => {
     if (u) {
       setEditingUser(u);
-      setUserModalSchoolId(u.schoolId || schools[0]?.id || '');
+      setUserModalSchoolId(u.schoolIds && u.schoolIds.length > 1 ? 'all' : (u.schoolId || 'all'));
       setUserModalClassIds(u.classIds ? [...u.classIds] : []);
     } else {
       setEditingUser(null);
-      setUserModalSchoolId(schools[0]?.id || '');
+      setUserModalSchoolId('all');
       setUserModalClassIds([]);
     }
     setIsUserModalOpen(true);
@@ -680,9 +680,19 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     const fullName = (formData.get('fullName') as string).trim();
     const username = (formData.get('username') as string).trim();
 
-    // Đối với Giáo viên: Lưu giữ trọn vẹn danh sách các lớp đã phân công
+    // Đối với Giáo viên: Lưu giữ trọn vẹn danh sách các trường và các lớp đã phân công
     const finalClassIds = role === 'teacher' ? userModalClassIds : [];
-    const finalSchoolId = role === 'teacher' ? (userModalSchoolId || undefined) : undefined;
+    const selectedSchoolSet = new Set<string>();
+    classes.forEach((c) => {
+      if (userModalClassIds.includes(c.id) && c.schoolId) {
+        selectedSchoolSet.add(c.schoolId);
+      }
+    });
+    if (userModalSchoolId && userModalSchoolId !== 'all') {
+      selectedSchoolSet.add(userModalSchoolId);
+    }
+    const finalSchoolIds = Array.from(selectedSchoolSet);
+    const finalSchoolId = finalSchoolIds[0] || (userModalSchoolId !== 'all' ? userModalSchoolId : undefined);
 
     const userData: Partial<UserAccount> & Omit<UserAccount, 'id' | 'createdAt' | 'updatedAt'> = {
       fullName,
@@ -693,6 +703,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       subjects: (formData.get('subjects') as string).trim(),
       role,
       schoolId: finalSchoolId,
+      schoolIds: finalSchoolIds,
       classIds: finalClassIds,
       status: formData.get('status') as UserAccount['status'],
     };
@@ -3408,7 +3419,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               <div className="p-3.5 bg-purple-50/80 border border-purple-200 rounded-xl space-y-3">
                 <div>
                   <label className="block text-[11px] font-semibold text-purple-900 mb-1">
-                    Trường Giảng Dạy / Phân Công
+                    Trường Giảng Dạy / Lọc Trường Phân Công
                   </label>
                   <select
                     value={userModalSchoolId}
@@ -3417,7 +3428,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                     }}
                     className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-purple-200 focus:border-purple-600 focus:outline-none bg-white font-medium"
                   >
-                    <option value="">-- Chưa phân trường --</option>
+                    <option value="all">-- Tất cả các trường (Phân công nhiều trường) --</option>
                     {schools.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name} ({s.code})
@@ -3441,41 +3452,74 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                       </button>
                     )}
                   </div>
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto border border-purple-200 p-2 rounded-lg bg-white">
-                    {classes
-                      .filter((c) => !userModalSchoolId || c.schoolId === userModalSchoolId)
-                      .map((cls) => {
-                        const isChecked = userModalClassIds.includes(cls.id);
+                  <div className="space-y-2 max-h-48 overflow-y-auto border border-purple-200 p-2.5 rounded-lg bg-white">
+                    {schools
+                      .filter((s) => userModalSchoolId === 'all' || !userModalSchoolId || s.id === userModalSchoolId)
+                      .map((s) => {
+                        const schoolClasses = classes.filter((c) => c.schoolId === s.id);
+                        if (schoolClasses.length === 0) return null;
+                        const allSelected = schoolClasses.every((c) => userModalClassIds.includes(c.id));
                         return (
-                          <label
-                            key={cls.id}
-                            className="flex items-center gap-2 p-1 rounded hover:bg-purple-50/50 transition-colors cursor-pointer text-xs"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setUserModalClassIds([...userModalClassIds, cls.id]);
-                                } else {
-                                  setUserModalClassIds(userModalClassIds.filter((id) => id !== cls.id));
-                                }
-                              }}
-                              className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5 cursor-pointer"
-                            />
-                            <span className="font-semibold text-slate-800">{cls.name}</span>
-                            <span className="text-[10px] text-slate-400 font-mono">({cls.code})</span>
-                          </label>
+                          <div key={s.id} className="border border-purple-100 rounded-lg p-2 bg-purple-50/30">
+                            <div className="flex items-center justify-between pb-1 mb-1 border-b border-purple-100/80">
+                              <span className="text-[11px] font-bold text-purple-950 flex items-center gap-1">
+                                <span>🏫 {s.name}</span>
+                                <span className="font-mono text-[10px] text-purple-600 font-semibold">({s.code})</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (allSelected) {
+                                    const schoolClassIds = new Set(schoolClasses.map((c) => c.id));
+                                    setUserModalClassIds(userModalClassIds.filter((id) => !schoolClassIds.has(id)));
+                                  } else {
+                                    const next = new Set(userModalClassIds);
+                                    schoolClasses.forEach((c) => next.add(c.id));
+                                    setUserModalClassIds(Array.from(next));
+                                  }
+                                }}
+                                className="text-[10px] font-semibold text-purple-700 hover:underline cursor-pointer"
+                              >
+                                {allSelected ? 'Bỏ chọn trường này' : 'Chọn cả trường'}
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                              {schoolClasses.map((cls) => {
+                                const isChecked = userModalClassIds.includes(cls.id);
+                                return (
+                                  <label
+                                    key={cls.id}
+                                    className="flex items-center gap-2 p-1 rounded hover:bg-white transition-colors cursor-pointer text-xs"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={(e) => {
+                                        if (e.target.checked) {
+                                          setUserModalClassIds([...userModalClassIds, cls.id]);
+                                        } else {
+                                          setUserModalClassIds(userModalClassIds.filter((id) => id !== cls.id));
+                                        }
+                                      }}
+                                      className="rounded text-purple-600 focus:ring-purple-500 w-3.5 h-3.5 cursor-pointer"
+                                    />
+                                    <span className="font-semibold text-slate-800">{cls.name}</span>
+                                    <span className="text-[10px] text-slate-400 font-mono">({cls.code})</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
                         );
                       })}
-                    {classes.filter((c) => !userModalSchoolId || c.schoolId === userModalSchoolId).length === 0 && (
-                      <p className="text-[11px] text-slate-400 py-2 text-center">
-                        Không có lớp nào thuộc trường này.
+                    {classes.filter((c) => userModalSchoolId === 'all' || !userModalSchoolId || c.schoolId === userModalSchoolId).length === 0 && (
+                      <p className="text-[11px] text-slate-400 py-3 text-center">
+                        Không có lớp học nào thuộc trường đã chọn.
                       </p>
                     )}
                   </div>
                   <p className="text-[10px] text-purple-700 mt-1">
-                    Tích chọn một hoặc nhiều lớp để phân công. Danh sách lớp sẽ được bảo lưu trọn vẹn khi bạn cập nhật thông tin giáo viên.
+                    Hỗ trợ phân công giáo viên giảng dạy ở <strong>nhiều trường cùng lúc</strong>. Tích chọn các lớp thuộc từng trường tương ứng.
                   </p>
                 </div>
               </div>
