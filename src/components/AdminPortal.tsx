@@ -708,15 +708,20 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       status: formData.get('status') as UserAccount['status'],
     };
 
-    if (editingUser) {
-      await updateUserAccount(editingUser.id, userData, currentUser.username);
-      showToast(`Đã cập nhật thông tin và danh sách lớp của giáo viên ${fullName} thành công!`);
-    } else {
-      await addUserAccount(userData, currentUser.username);
-      showToast('Đã cấp tài khoản giáo viên/nhân sự mới thành công!');
+    try {
+      if (editingUser) {
+        await updateUserAccount(editingUser.id, userData, currentUser.username);
+        showToast(`Đã cập nhật thông tin và phân công (${finalSchoolIds.length} trường, ${finalClassIds.length} lớp) cho giáo viên ${fullName} trên Turso!`);
+      } else {
+        await addUserAccount(userData, currentUser.username);
+        showToast(`Đã cấp tài khoản giáo viên "${fullName}" (@${username}) và lưu vào cơ sở dữ liệu Turso thành công!`);
+      }
+      setIsUserModalOpen(false);
+      setEditingUser(null);
+    } catch (err: any) {
+      console.error('Lỗi khi lưu tài khoản vào Turso:', err);
+      showToast(`Lỗi khi lưu tài khoản vào CSDL Turso: ${err?.message || 'Vui lòng kiểm tra lại kết nối'}`, 'error');
     }
-    setIsUserModalOpen(false);
-    setEditingUser(null);
   };
 
   const handleDeleteUser = (u: UserAccount) => {
@@ -804,14 +809,32 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
     e.preventDefault();
     if (!assigningTeacher) return;
 
-    await assignTeacherSchoolAndClasses(
-      assigningTeacher.id,
-      teacherSchoolAssign,
-      teacherClassesAssign,
-      currentUser.username
-    );
-    showToast(`Đã phân công trường và lớp cho giáo viên ${assigningTeacher.fullName || assigningTeacher.username} thành công!`);
-    setAssigningTeacher(null);
+    const assignedSchoolSet = new Set<string>();
+    classes.forEach((c) => {
+      if (teacherClassesAssign.includes(c.id) && c.schoolId) {
+        assignedSchoolSet.add(c.schoolId);
+      }
+    });
+    if (teacherSchoolAssign && teacherSchoolAssign !== 'all') {
+      assignedSchoolSet.add(teacherSchoolAssign);
+    }
+    const finalSchoolIds = Array.from(assignedSchoolSet);
+    const finalSchoolId = finalSchoolIds[0] || (teacherSchoolAssign !== 'all' ? teacherSchoolAssign : '');
+
+    try {
+      await assignTeacherSchoolAndClasses(
+        assigningTeacher.id,
+        finalSchoolId,
+        teacherClassesAssign,
+        currentUser.username,
+        finalSchoolIds
+      );
+      showToast(`Đã phân công ${finalSchoolIds.length} trường và ${teacherClassesAssign.length} lớp cho giáo viên ${assigningTeacher.fullName || assigningTeacher.username} và lưu vào Turso!`);
+      setAssigningTeacher(null);
+    } catch (err: any) {
+      console.error('Lỗi khi phân công giáo viên:', err);
+      showToast(`Lỗi khi lưu phân công vào Turso: ${err?.message || 'Vui lòng thử lại'}`, 'error');
+    }
   };
 
   const adminMenuItems: SidebarMenuItem[] = [
@@ -2240,32 +2263,67 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                           </td>
                           <td className="py-3.5 px-4">
                             {u.role === 'teacher' ? (
-                              assignedSchool || assignedClasses.length > 0 ? (
-                                <div className="space-y-1">
-                                  {assignedSchool && (
-                                    <div className="text-xs font-semibold text-blue-700 flex items-center gap-1">
-                                      <SchoolIcon className="w-3 h-3 text-blue-500 shrink-0" />
-                                      <span>{assignedSchool.name}</span>
-                                    </div>
-                                  )}
-                                  {assignedClasses.length > 0 && (
-                                    <div className="flex flex-wrap gap-1">
-                                      {assignedClasses.map((cls) => (
-                                        <span
-                                          key={cls.id}
-                                          className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200"
-                                        >
-                                          {cls.name}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                                  Chưa phân trường/lớp
-                                </span>
-                              )
+                              (() => {
+                                const teacherAssignedSchoolIds = new Set<string>();
+                                if (u.schoolId) teacherAssignedSchoolIds.add(u.schoolId);
+                                if (Array.isArray(u.schoolIds)) {
+                                  u.schoolIds.forEach((sid) => teacherAssignedSchoolIds.add(sid));
+                                }
+                                (u.classIds || []).forEach((cid) => {
+                                  const cls = classMap.get(cid);
+                                  if (cls?.schoolId) teacherAssignedSchoolIds.add(cls.schoolId);
+                                });
+
+                                const schoolGroups = Array.from(teacherAssignedSchoolIds).map((sid) => {
+                                  const sch = schoolMap.get(sid);
+                                  const schClasses = (u.classIds || [])
+                                    .map((cid) => classMap.get(cid))
+                                    .filter((c): c is SchoolClass => Boolean(c && c.schoolId === sid));
+                                  return {
+                                    schoolId: sid,
+                                    schoolName: sch?.name || `Trường (${sid})`,
+                                    classes: schClasses,
+                                  };
+                                });
+
+                                if (schoolGroups.length === 0) {
+                                  return (
+                                    <span className="text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                      Chưa phân trường/lớp
+                                    </span>
+                                  );
+                                }
+
+                                return (
+                                  <div className="space-y-1.5 max-w-xs">
+                                    {schoolGroups.map((g, gIdx) => (
+                                      <div key={g.schoolId || gIdx} className="bg-slate-50 border border-slate-200/90 rounded-lg p-1.5 text-xs">
+                                        <div className="font-bold text-indigo-700 flex items-center gap-1">
+                                          <SchoolIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                                          <span className="truncate">{g.schoolName}</span>
+                                          <span className="text-[10px] text-slate-400 font-mono">({g.classes.length} lớp)</span>
+                                        </div>
+                                        {g.classes.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1 mt-1">
+                                            {g.classes.map((cls) => (
+                                              <span
+                                                key={cls.id}
+                                                className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-indigo-100 text-indigo-800"
+                                              >
+                                                {cls.name}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div className="text-[10px] text-slate-400 italic mt-0.5">
+                                            Toàn bộ trường (không giới hạn lớp)
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })()
                             ) : (
                               <span className="text-xs text-slate-400">Toàn hệ thống</span>
                             )}
@@ -2309,7 +2367,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
                                   <button
                                     onClick={() => {
                                       setAssigningTeacher(u);
-                                      setTeacherSchoolAssign(u.schoolId || schools[0]?.id || '');
+                                      setTeacherSchoolAssign(u.schoolIds && u.schoolIds.length > 1 ? 'all' : (u.schoolId || 'all'));
                                       setTeacherClassesAssign(u.classIds || []);
                                     }}
                                     className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors cursor-pointer"
@@ -3828,17 +3886,16 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  1. Trường Giảng Dạy / Công Tác *
+                  1. Trường Giảng Dạy / Lọc Trường Phân Công
                 </label>
                 <select
                   value={teacherSchoolAssign}
                   onChange={(e) => {
                     setTeacherSchoolAssign(e.target.value);
-                    // Filter or keep valid classes
                   }}
                   className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-blue-600 focus:outline-none bg-white font-medium"
                 >
-                  <option value="">-- Chọn trường học --</option>
+                  <option value="all">-- Tất cả các trường (Phân công nhiều trường) --</option>
                   {schools.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name} ({s.code})
@@ -3848,49 +3905,89 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  2. Các Lớp Phụ Trách / Giảng Dạy
-                </label>
-                <div className="space-y-1.5 max-h-48 overflow-y-auto border border-slate-200 p-2.5 rounded-xl bg-slate-50">
-                  {classes
-                    .filter((c) => !teacherSchoolAssign || c.schoolId === teacherSchoolAssign)
-                    .map((cls) => {
-                      const isChecked = teacherClassesAssign.includes(cls.id);
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    2. Các Lớp Phụ Trách ({teacherClassesAssign.length} lớp đã chọn)
+                  </label>
+                  {teacherClassesAssign.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setTeacherClassesAssign([])}
+                      className="text-[11px] text-blue-700 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn tất cả
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto border border-blue-200 p-2.5 rounded-xl bg-white">
+                  {schools
+                    .filter((s) => teacherSchoolAssign === 'all' || !teacherSchoolAssign || s.id === teacherSchoolAssign)
+                    .map((s) => {
+                      const schoolClasses = classes.filter((c) => c.schoolId === s.id);
+                      if (schoolClasses.length === 0) return null;
+                      const allSelected = schoolClasses.every((c) => teacherClassesAssign.includes(c.id));
                       return (
-                        <label
-                          key={cls.id}
-                          className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white transition-colors cursor-pointer text-xs"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setTeacherClassesAssign([...teacherClassesAssign, cls.id]);
-                              } else {
-                                setTeacherClassesAssign(teacherClassesAssign.filter((id) => id !== cls.id));
-                              }
-                            }}
-                            className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
-                          />
-                          <span className="font-semibold text-slate-800">{cls.name}</span>
-                          <span className="text-[11px] text-slate-400 font-mono">({cls.code})</span>
-                          {cls.homeroomTeacher && (
-                            <span className="text-[10px] text-slate-500 ml-auto">
-                              GVCN: {cls.homeroomTeacher}
+                        <div key={s.id} className="border border-blue-100 rounded-lg p-2 bg-blue-50/30">
+                          <div className="flex items-center justify-between pb-1 mb-1 border-b border-blue-100/80">
+                            <span className="text-[11px] font-bold text-blue-950 flex items-center gap-1">
+                              <span>🏫 {s.name}</span>
+                              <span className="font-mono text-[10px] text-blue-600 font-semibold">({s.code})</span>
                             </span>
-                          )}
-                        </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (allSelected) {
+                                  const schoolClassIds = new Set(schoolClasses.map((c) => c.id));
+                                  setTeacherClassesAssign(teacherClassesAssign.filter((id) => !schoolClassIds.has(id)));
+                                } else {
+                                  const next = new Set(teacherClassesAssign);
+                                  schoolClasses.forEach((c) => next.add(c.id));
+                                  setTeacherClassesAssign(Array.from(next));
+                                }
+                              }}
+                              className="text-[10px] font-semibold text-blue-700 hover:underline cursor-pointer"
+                            >
+                              {allSelected ? 'Bỏ chọn trường này' : 'Chọn cả trường'}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                            {schoolClasses.map((cls) => {
+                              const isChecked = teacherClassesAssign.includes(cls.id);
+                              return (
+                                <label
+                                  key={cls.id}
+                                  className="flex items-center gap-2 p-1.5 rounded hover:bg-white transition-colors cursor-pointer text-xs"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        setTeacherClassesAssign([...teacherClassesAssign, cls.id]);
+                                      } else {
+                                        setTeacherClassesAssign(teacherClassesAssign.filter((id) => id !== cls.id));
+                                      }
+                                    }}
+                                    className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5 cursor-pointer"
+                                  />
+                                  <span className="font-semibold text-slate-800">{cls.name}</span>
+                                  <span className="text-[10px] text-slate-400 font-mono">({cls.code})</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </div>
                       );
                     })}
-                  {classes.filter((c) => !teacherSchoolAssign || c.schoolId === teacherSchoolAssign).length === 0 && (
+                  {classes.filter((c) => teacherSchoolAssign === 'all' || !teacherSchoolAssign || c.schoolId === teacherSchoolAssign).length === 0 && (
                     <p className="text-xs text-slate-400 py-3 text-center">
                       Không có lớp nào thuộc trường này. Vui lòng tạo lớp học trước.
                     </p>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Thầy/Cô có thể tích chọn một hoặc nhiều lớp để phân công cho giáo viên này.
+                <p className="text-[10px] text-blue-700 mt-1">
+                  Hệ thống hỗ trợ phân công giảng dạy tại <strong>nhiều trường cùng lúc</strong>. Tích chọn các lớp thuộc từng trường tương ứng.
                 </p>
               </div>
 

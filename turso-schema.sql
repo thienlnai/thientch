@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone TEXT,
   subjects TEXT,
   schoolId TEXT,
+  schoolIds TEXT DEFAULT '[]',
   classIds TEXT DEFAULT '[]',
   role TEXT NOT NULL,
   status TEXT DEFAULT 'active',

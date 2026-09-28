@@ -123,13 +123,20 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const assignedClasses = useMemo(() => {
     const teacherClassIds = new Set(teacher.classIds || []);
     const teacherNameClean = (teacher.fullName || '').trim().toLowerCase();
+    const hasExplicitClasses = teacherClassIds.size > 0;
+    const teacherSchoolIdSet = new Set<string>();
+    if (teacher.schoolId) teacherSchoolIdSet.add(teacher.schoolId);
+    if (Array.isArray(teacher.schoolIds)) {
+      teacher.schoolIds.forEach((id: string) => teacherSchoolIdSet.add(id));
+    }
 
     return classes.filter(
       (c) =>
         teacherClassIds.has(c.id) ||
-        (c.homeroomTeacher && c.homeroomTeacher.trim().toLowerCase() === teacherNameClean)
+        (c.homeroomTeacher && c.homeroomTeacher.trim().toLowerCase() === teacherNameClean) ||
+        (!hasExplicitClasses && c.schoolId && teacherSchoolIdSet.has(c.schoolId))
     );
-  }, [classes, teacher.classIds, teacher.fullName]);
+  }, [classes, teacher.classIds, teacher.fullName, teacher.schoolId, teacher.schoolIds]);
 
   const assignedClassIds = useMemo(
     () => new Set(assignedClasses.map((c) => c.id)),
@@ -174,7 +181,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
       school: entry.school,
       schoolName: entry.school ? entry.school.name : (sId === 'unassigned' ? 'Cơ sở / Trường chưa phân loại' : `Trường (${sId})`),
       schoolCode: entry.school?.code || '',
-      classes: entry.classes,
+      classes: entry.classes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })),
       studentCount: entry.studentCount,
     })).sort((a, b) => b.classes.length - a.classes.length);
   }, [assignedClasses, schools, students, teacher.schoolId, teacher.schoolIds]);
@@ -2839,6 +2846,69 @@ NOTIFY pgrst, 'reload schema';`;
                   </div>
                 </div>
               </div>
+
+              {/* Bảng phân công chi tiết theo từng trường (Executive Breakdown) */}
+              {teacherSchools.length > 0 && (
+                <div className="bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-2xs">
+                  <div className="text-xs font-bold text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <SchoolIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span>Danh Sách Trường Được Phân Công & Các Lớp Giảng Dạy:</span>
+                    </div>
+                    <span className="text-[11px] text-indigo-700 font-semibold font-mono">
+                      (Bấm vào từng trường để lọc nhanh)
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {teacherSchools.map((ts, idx) => {
+                      const isSelected = schoolFilterForClasses === ts.schoolId;
+                      return (
+                        <div
+                          key={ts.schoolId}
+                          onClick={() => setSchoolFilterForClasses(isSelected ? 'all' : ts.schoolId)}
+                          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-white border-indigo-500 shadow-xs ring-2 ring-indigo-200'
+                              : 'bg-white/80 border-slate-200 hover:border-indigo-300 hover:bg-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
+                              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-mono text-[11px] flex items-center justify-center font-bold shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="truncate">{ts.schoolName}</span>
+                            </span>
+                            <span className="text-[11px] font-bold text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 shrink-0">
+                              {ts.classes.length} lớp
+                            </span>
+                          </div>
+
+                          <div className="mt-2 pl-6 flex flex-wrap items-center gap-1.5">
+                            <span className="text-slate-500 text-[11px] font-medium">Lớp:</span>
+                            {ts.classes.length > 0 ? (
+                              ts.classes.map((cls) => (
+                                <span
+                                  key={cls.id}
+                                  className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200"
+                                >
+                                  {cls.name}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-slate-400 italic text-[11px]">Toàn bộ các lớp của trường</span>
+                            )}
+                            <span className="ml-auto text-[11px] text-emerald-700 font-semibold shrink-0">
+                              ({ts.studentCount} HS)
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Filter Bar: Tìm kiếm lớp & Tabs chọn trường */}
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">

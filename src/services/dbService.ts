@@ -994,9 +994,9 @@ export async function safeDbUpsert(table: string, payload: any): Promise<{ data:
     return { data: records, error: null };
   }
 
-  try {
-    const statements: Array<{ sql: string; args: any[] }> = [];
+  const statements: Array<{ sql: string; args: any[] }> = [];
 
+  try {
     for (const rawItem of records) {
       const item = cleanDbData(prepareDbPayload(table, rawItem));
       const keys = Object.keys(item);
@@ -1030,6 +1030,24 @@ export async function safeDbUpsert(table: string, payload: any): Promise<{ data:
 
     return { data: records, error: null };
   } catch (err: any) {
+    const errMsg = String(err?.message || err || '').toLowerCase();
+    // Tự động xử lý bổ sung cột nếu bảng users hoặc bảng khác thiếu cột
+    if (errMsg.includes('no such column') || errMsg.includes('has no column')) {
+      try {
+        console.warn(`[Turso] Phát hiện thiếu cột trên bảng ${table}, đang tự động bổ sung cột và thử lại...`);
+        if (table === USERS_TABLE) {
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN schoolIds TEXT DEFAULT '[]'`);
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN subjects TEXT`);
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN phone TEXT`);
+        }
+        // Thử lại batch sau khi đã bổ sung cột
+        await tursoBatch(statements);
+        return { data: records, error: null };
+      } catch (retryErr) {
+        console.warn('[Turso] Thử lại sau khi bổ sung cột thất bại:', retryErr);
+      }
+    }
+
     handleTursoError(err, OperationType.WRITE, table);
     return { data: null, error: err };
   }
@@ -1058,6 +1076,32 @@ export async function safeDbUpdate(table: string, payload: any, matchColumn: str
     await tursoExecute(sql, values);
     return { data: payload, error: null };
   } catch (err: any) {
+    const errMsg = String(err?.message || err || '').toLowerCase();
+    if (errMsg.includes('no such column') || errMsg.includes('has no column')) {
+      try {
+        if (table === USERS_TABLE) {
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN schoolIds TEXT DEFAULT '[]'`);
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN subjects TEXT`);
+          await tursoExecute(`ALTER TABLE "${USERS_TABLE}" ADD COLUMN phone TEXT`);
+          const item = cleanDbData(prepareDbPayload(table, payload, true));
+          const keys = Object.keys(item).filter((k) => k !== matchColumn);
+          const setClauses = keys.map((k) => `"${k}" = ?`).join(', ');
+          const values = keys.map((k) => {
+            const val = item[k];
+            if (val === undefined) return null;
+            if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+            if (typeof val === 'boolean') return val ? 1 : 0;
+            return val;
+          });
+          values.push(matchValue);
+          const retrySql = `UPDATE "${table}" SET ${setClauses} WHERE "${matchColumn}" = ?`;
+          await tursoExecute(retrySql, values);
+          return { data: payload, error: null };
+        }
+      } catch (retryErr) {
+        console.warn('[Turso] Thử lại safeDbUpdate thất bại:', retryErr);
+      }
+    }
     handleTursoError(err, OperationType.UPDATE, table);
     return { data: null, error: err };
   }
@@ -2131,7 +2175,11 @@ export async function addUserAccount(
   notifyUsers();
 
   if (isConfigured) {
-    await safeDbUpsert(USERS_TABLE, newUser);
+    const res = await safeDbUpsert(USERS_TABLE, newUser);
+    if (res.error) {
+      console.error('[addUserAccount] Lỗi lưu vào Turso:', res.error);
+      throw new Error(`Lỗi khi lưu tài khoản vào cơ sở dữ liệu Turso: ${res.error?.message || String(res.error)}`);
+    }
   }
   return newUser;
 }
@@ -2142,7 +2190,11 @@ export async function updateUserAccount(id: string, data: Partial<UserAccount>, 
   notifyUsers();
 
   if (isConfigured) {
-    await safeDbUpdate(USERS_TABLE, { ...data, updatedAt: now }, 'id', id);
+    const res = await safeDbUpdate(USERS_TABLE, { ...data, updatedAt: now }, 'id', id);
+    if (res.error) {
+      console.error('[updateUserAccount] Lỗi cập nhật Turso:', res.error);
+      throw new Error(`Lỗi khi cập nhật tài khoản trên Turso: ${res.error?.message || String(res.error)}`);
+    }
   }
 }
 
@@ -2159,9 +2211,14 @@ export async function assignTeacherSchoolAndClasses(
   teacherId: string,
   schoolId: string,
   classIds: string[],
-  _actorUsername?: string
+  actorUsername?: string,
+  schoolIds?: string[]
 ): Promise<void> {
-  await updateUserAccount(teacherId, { schoolId, classIds });
+  const finalSchoolIds = Array.isArray(schoolIds) && schoolIds.length > 0
+    ? schoolIds
+    : (schoolId ? [schoolId] : []);
+  const finalSchoolId = finalSchoolIds[0] || schoolId;
+  await updateUserAccount(teacherId, { schoolId: finalSchoolId, schoolIds: finalSchoolIds, classIds }, actorUsername);
 }
 
 // ================= CRUD: EXAMS =================

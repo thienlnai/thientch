@@ -351,6 +351,7 @@ export async function initTursoSchema(client: Client = turso): Promise<{ success
       phone TEXT,
       subjects TEXT,
       schoolId TEXT,
+      schoolIds TEXT DEFAULT '[]',
       classIds TEXT DEFAULT '[]',
       role TEXT NOT NULL,
       status TEXT DEFAULT 'active',
@@ -552,9 +553,31 @@ export async function initTursoSchema(client: Client = turso): Promise<{ success
     for (const sql of statements) {
       await client.execute(sql);
     }
+
+    // Auto-migration: Thêm cột mới nếu cơ sở dữ liệu đã tồn tại từ phiên bản cũ
+    const migrations = [
+      `ALTER TABLE users ADD COLUMN schoolIds TEXT DEFAULT '[]'`,
+      `ALTER TABLE users ADD COLUMN subjects TEXT`,
+      `ALTER TABLE users ADD COLUMN phone TEXT`,
+      `ALTER TABLE users ADD COLUMN email TEXT`,
+      `ALTER TABLE users ADD COLUMN schoolId TEXT`,
+      `ALTER TABLE users ADD COLUMN classIds TEXT DEFAULT '[]'`,
+      `ALTER TABLE classes ADD COLUMN schoolId TEXT`,
+      `ALTER TABLE students ADD COLUMN schoolId TEXT`,
+      `ALTER TABLE exam_questions ADD COLUMN examId TEXT`,
+      `ALTER TABLE question_bank ADD COLUMN examId TEXT`,
+    ];
+    for (const m of migrations) {
+      try {
+        await client.execute(m);
+      } catch {
+        // Cột đã tồn tại, bỏ qua an toàn
+      }
+    }
+
     return {
       success: true,
-      message: 'Đã khởi tạo thành công toàn bộ 15 bảng và chỉ mục trên Turso Database!',
+      message: 'Đã khởi tạo và đồng bộ thành công toàn bộ bảng & trường dữ liệu trên Turso Database!',
     };
   } catch (err: any) {
     return {
@@ -565,13 +588,16 @@ export async function initTursoSchema(client: Client = turso): Promise<{ success
 }
 
 /**
- * Test Turso connection on app load
+ * Test Turso connection on app load & ensure essential column migrations
  */
 export async function testConnection(): Promise<boolean> {
   if (!isConfigured) return false;
   try {
     await turso.execute('SELECT 1');
     console.log('[Turso] Đã kết nối Turso Database thành công.');
+    
+    // Tự động kiểm tra và thêm cột schoolIds nếu DB chưa có
+    turso.execute(`ALTER TABLE users ADD COLUMN schoolIds TEXT DEFAULT '[]'`).catch(() => {});
     return true;
   } catch (err) {
     console.warn('[Turso] Không thể kết nối tới Turso:', err);
