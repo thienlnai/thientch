@@ -1,6 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { ExamQuestion, QuestionType } from '../types/index.ts';
-import { subscribeQuestionBank, getQuestionBank } from '../services/dbService.ts';
+import { 
+  subscribeQuestionBank, 
+  getQuestionBank, 
+  deleteQuestionFromDatabase, 
+  bulkDeleteQuestionsFromDatabase 
+} from '../services/dbService.ts';
 import {
   Search,
   Check,
@@ -18,15 +23,19 @@ import {
   Image as ImageIcon,
   CheckCircle2,
   BookOpen,
-  UserCheck
+  Trash2,
+  AlertTriangle,
+  ShieldCheck,
+  Loader2
 } from 'lucide-react';
 
 interface QuestionBankModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSelectQuestions: (questions: ExamQuestion[]) => void;
+  onSelectQuestions?: (questions: ExamQuestion[]) => void;
   currentExamQuestionTitles?: string[];
   defaultSubject?: string;
+  isAdmin?: boolean;
 }
 
 export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
@@ -35,6 +44,7 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
   onSelectQuestions,
   currentExamQuestionTitles = [],
   defaultSubject = 'all',
+  isAdmin = false,
 }) => {
   const [bankQuestions, setBankQuestions] = useState<ExamQuestion[]>(() => getQuestionBank());
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,6 +52,17 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
   const [subjectFilter, setSubjectFilter] = useState<string>(defaultSubject !== 'all' ? defaultSubject : 'all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Admin delete states
+  const [questionToDelete, setQuestionToDelete] = useState<ExamQuestion | null>(null);
+  const [isBulkDeletingConfirm, setIsBulkDeletingConfirm] = useState(false);
+  const [isDeletingLoading, setIsDeletingLoading] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+
+  const showFeedback = (text: string, type: 'success' | 'error' = 'success') => {
+    setFeedbackMsg({ text, type });
+    setTimeout(() => setFeedbackMsg(null), 3500);
+  };
 
   // Subscribe to live question bank updates
   useEffect(() => {
@@ -59,6 +80,8 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
     if (isOpen) {
       setSelectedIds(new Set());
       setSearchQuery('');
+      setQuestionToDelete(null);
+      setIsBulkDeletingConfirm(false);
       if (defaultSubject && defaultSubject !== 'all') {
         setSubjectFilter(defaultSubject);
       }
@@ -135,16 +158,58 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
   };
 
   const handleConfirmSelect = () => {
+    if (!onSelectQuestions) {
+      onClose();
+      return;
+    }
     const selectedQuestions = bankQuestions
       .filter((q) => selectedIds.has(q.id))
       .map((q) => ({
         ...q,
-        // Giữ nguyên ID câu hỏi sẵn có từ ngân hàng câu hỏi để tái sử dụng, không tạo mới dữ liệu câu hỏi
         id: q.id,
       }));
 
     onSelectQuestions(selectedQuestions);
     onClose();
+  };
+
+  // Admin delete single question
+  const handleConfirmSingleDelete = async () => {
+    if (!questionToDelete) return;
+    setIsDeletingLoading(true);
+    try {
+      await deleteQuestionFromDatabase(questionToDelete.id);
+      setBankQuestions((prev) => prev.filter((q) => q.id !== questionToDelete.id));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.delete(questionToDelete.id);
+        return next;
+      });
+      showFeedback(`Đã xóa vĩnh viễn câu hỏi khỏi database!`, 'success');
+      setQuestionToDelete(null);
+    } catch {
+      showFeedback('Lỗi khi xóa câu hỏi khỏi database!', 'error');
+    } finally {
+      setIsDeletingLoading(false);
+    }
+  };
+
+  // Admin bulk delete questions
+  const handleConfirmBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setIsDeletingLoading(true);
+    try {
+      const ids = Array.from(selectedIds);
+      const count = await bulkDeleteQuestionsFromDatabase(ids);
+      setBankQuestions((prev) => prev.filter((q) => !selectedIds.has(q.id)));
+      setSelectedIds(new Set());
+      showFeedback(`Đã xóa thành công ${count} câu hỏi khỏi database!`, 'success');
+      setIsBulkDeletingConfirm(false);
+    } catch {
+      showFeedback('Lỗi khi xóa hàng loạt câu hỏi khỏi database!', 'error');
+    } finally {
+      setIsDeletingLoading(false);
+    }
   };
 
   const getTypeLabel = (type: QuestionType) => {
@@ -172,7 +237,19 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="w-full max-w-4xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] relative">
+        {/* Notification Toast */}
+        {feedbackMsg && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-70 px-4 py-2 rounded-xl text-xs font-bold text-white shadow-xl animate-in fade-in slide-in-from-top-3 flex items-center gap-2 bg-slate-900 border border-slate-700">
+            {feedbackMsg.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-rose-400" />
+            )}
+            <span>{feedbackMsg.text}</span>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="px-6 py-4.5 bg-gradient-to-r from-purple-700 via-indigo-700 to-indigo-800 text-white flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
@@ -180,14 +257,24 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
               <Database className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-base sm:text-lg flex items-center gap-2">
-                <span>Ngân Hàng Câu Hỏi Khảo Thí</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-bold text-base sm:text-lg">
+                  Ngân Hàng Câu Hỏi Khảo Thí
+                </h3>
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-white/20 text-white font-mono font-bold">
                   {bankQuestions.length} câu hỏi
                 </span>
-              </h3>
+                {isAdmin && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-500/40 text-white border border-red-300/50 font-bold flex items-center gap-1 shadow-2xs">
+                    <ShieldCheck className="w-3 h-3 text-red-200" />
+                    <span>Quyền Admin: Cho phép xóa câu hỏi khỏi CSDL</span>
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-indigo-200 mt-0.5">
-                Chọn câu hỏi có sẵn để đưa nhanh vào đề thi. Câu hỏi được lưu trữ vĩnh viễn và không bị mất khi xóa đề thi.
+                {isAdmin 
+                  ? 'Quản lý toàn bộ ngân hàng câu hỏi. Admin có toàn quyền xóa câu hỏi vĩnh viễn khỏi Database Turso.'
+                  : 'Chọn câu hỏi có sẵn để đưa nhanh vào đề thi. Câu hỏi được lưu trữ vĩnh viễn và không bị mất khi xóa đề thi.'}
               </p>
             </div>
           </div>
@@ -259,9 +346,9 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
             </div>
           </div>
 
-          {/* Quick select & Stats info */}
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-200/80 text-xs">
-            <div className="flex items-center gap-3">
+          {/* Quick Info & Select All */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 text-xs">
+            <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={handleToggleSelectAll}
@@ -274,37 +361,52 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                 )}
                 <span>
                   {isAllVisibleSelected
-                    ? 'Bỏ chọn tất cả'
-                    : `Chọn tất cả (${filteredQuestions.length} câu đang hiển thị)`}
+                    ? 'Bỏ chọn tất cả hiển thị'
+                    : `Chọn tất cả (${filteredQuestions.length})`}
                 </span>
               </button>
+              <span className="text-slate-400">•</span>
+              <span className="text-slate-500">
+                Đang hiển thị <strong>{filteredQuestions.length}</strong> / {bankQuestions.length} câu hỏi
+              </span>
+            </div>
 
-              {selectedIds.size > 0 && (
-                <span className="text-slate-500">
-                  • Đang chọn: <strong className="text-purple-700 font-mono">{selectedIds.size}</strong> câu
+            {selectedIds.size > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 font-bold font-mono">
+                  Đã chọn {selectedIds.size} câu hỏi
                 </span>
-              )}
-            </div>
-
-            <div className="text-[11px] text-slate-400">
-              Hiển thị {filteredQuestions.length} / {bankQuestions.length} câu hỏi trong kho
-            </div>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkDeletingConfirm(true)}
+                    className="px-2.5 py-1 text-xs font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                    title="Xóa các câu hỏi đã chọn khỏi CSDL"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                    <span>Xóa {selectedIds.size} câu khỏi CSDL</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Questions List */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-3.5 divide-y divide-slate-100">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 bg-[#F8FAFC]">
           {filteredQuestions.map((q, idx) => {
             const isSelected = selectedIds.has(q.id);
+            const isExpanded = expandedId === q.id;
             const isAlreadyInExam = existingTitleSet.has((q.title || '').trim().toLowerCase());
             const typeInfo = getTypeLabel(q.type);
-            const isExpanded = expandedId === q.id;
 
             return (
               <div
                 key={q.id}
-                className={`pt-3.5 first:pt-0 rounded-2xl transition-all ${
-                  isSelected ? 'bg-purple-50/50 p-3 border border-purple-200' : ''
+                className={`p-4 rounded-2xl border transition-all ${
+                  isSelected
+                    ? 'bg-purple-50/60 border-purple-300 shadow-sm'
+                    : 'bg-white border-slate-200 hover:border-slate-300 shadow-2xs'
                 }`}
               >
                 <div className="flex items-start gap-3">
@@ -312,7 +414,7 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                   <button
                     type="button"
                     onClick={() => handleToggleSelectOne(q.id)}
-                    className="mt-0.5 text-purple-600 hover:text-purple-800 cursor-pointer shrink-0"
+                    className="mt-0.5 cursor-pointer shrink-0"
                   >
                     {isSelected ? (
                       <CheckSquare className="w-5 h-5 text-purple-600" />
@@ -323,34 +425,66 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
 
                   {/* Question Content */}
                   <div className="flex-1 min-w-0 space-y-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-mono text-xs font-bold text-slate-400">#{idx + 1}</span>
-                      <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${typeInfo.color}`}
-                      >
-                        {typeInfo.label}
-                      </span>
-                      {q.subject && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
-                          {q.subject}
+                    <div className="flex flex-wrap items-center gap-1.5 justify-between">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-mono text-xs font-bold text-slate-400">#{idx + 1}</span>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${typeInfo.color}`}
+                        >
+                          {typeInfo.label}
                         </span>
-                      )}
-                      {isAlreadyInExam && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-amber-700" />
-                          <span>Đã có trong đề thi này</span>
-                        </span>
-                      )}
-                      {q.sourceExamTitle && (
-                        <span className="text-[10px] text-slate-400 truncate max-w-xs" title={q.sourceExamTitle}>
-                          Nguồn: {q.sourceExamTitle}
-                        </span>
+                        {q.subject && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                            {q.subject}
+                          </span>
+                        )}
+                        {isAlreadyInExam && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
+                            <CheckCircle2 className="w-3 h-3 text-amber-700" />
+                            <span>Đã có trong đề thi này</span>
+                          </span>
+                        )}
+                        {q.sourceExamTitle && (
+                          <span className="text-[10px] text-slate-400 truncate max-w-xs" title={q.sourceExamTitle}>
+                            Nguồn: {q.sourceExamTitle}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Admin Delete Action Button */}
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuestionToDelete(q);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-red-600 hover:text-white hover:bg-red-600 border border-red-200 transition-all cursor-pointer flex items-center gap-1 text-[11px] font-bold shadow-2xs"
+                          title="Xóa vĩnh viễn câu hỏi này khỏi database Turso"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Xóa khỏi CSDL</span>
+                        </button>
                       )}
                     </div>
 
                     <h4 className="text-xs sm:text-sm font-bold text-slate-800 leading-snug">
                       {q.title || 'Câu hỏi chưa đặt tiêu đề'}
                     </h4>
+
+                    {/* Hiển thị ảnh câu hỏi nếu có (GitHub Raw URL) */}
+                    {q.mediaUrl && (
+                      <div className="pt-1">
+                        <img 
+                          src={q.mediaUrl} 
+                          alt="Ảnh minh họa câu hỏi" 
+                          className="max-h-40 rounded-xl border border-slate-200 object-contain bg-slate-50 p-1"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {/* Preview summary of options or details */}
                     {q.type === 'single_choice' && q.options && (
@@ -368,6 +502,9 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                               {opt.id === q.correctOptionId ? '✓ ĐÚNG' : '•'}
                             </span>
                             <span className="truncate">{opt.text}</span>
+                            {opt.imageUrl && (
+                              <img src={opt.imageUrl} alt="" className="w-6 h-6 object-cover rounded ml-auto" />
+                            )}
                           </div>
                         ))}
                       </div>
@@ -390,6 +527,9 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                                 {isCorrect ? '✓ ĐÚNG' : '•'}
                               </span>
                               <span className="truncate">{opt.text}</span>
+                              {opt.imageUrl && (
+                                <img src={opt.imageUrl} alt="" className="w-6 h-6 object-cover rounded ml-auto" />
+                              )}
                             </div>
                           );
                         })}
@@ -447,6 +587,12 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
                             ))}
                           </div>
                         )}
+                        {q.hotspotImageUrl && (
+                          <div>
+                            <span className="font-bold text-slate-800">Ảnh Hotspot:</span>
+                            <img src={q.hotspotImageUrl} alt="" className="max-h-36 rounded-lg mt-1 border" />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -471,14 +617,25 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
           <div className="text-xs text-slate-600">
             {selectedIds.size > 0 ? (
               <span className="text-purple-700 font-bold">
-                ✓ Đã chọn {selectedIds.size} câu hỏi để thêm vào đề thi
+                ✓ Đã chọn {selectedIds.size} câu hỏi
               </span>
             ) : (
-              <span>Chọn các câu hỏi bạn muốn sử dụng rồi nhấn nút bên phải.</span>
+              <span>Chọn các câu hỏi bạn muốn thao tác rồi nhấn nút bên phải.</span>
             )}
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto justify-end">
+            {isAdmin && selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsBulkDeletingConfirm(true)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Xóa {selectedIds.size} Câu Khỏi CSDL</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={onClose}
@@ -487,17 +644,107 @@ export const QuestionBankModal: React.FC<QuestionBankModalProps> = ({
               Đóng
             </button>
 
-            <button
-              type="button"
-              disabled={selectedIds.size === 0}
-              onClick={handleConfirmSelect}
-              className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <Check className="w-4 h-4" />
-              <span>Thêm {selectedIds.size > 0 ? `${selectedIds.size} ` : ''}Câu Hỏi Vào Đề Thi</span>
-            </button>
+            {onSelectQuestions && (
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={handleConfirmSelect}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Thêm {selectedIds.size > 0 ? `${selectedIds.size} ` : ''}Câu Hỏi Vào Đề Thi</span>
+              </button>
+            )}
           </div>
         </div>
+
+        {/* ================= MODAL XÁC NHẬN XÓA 1 CÂU HỎI (ADMIN) ================= */}
+        {questionToDelete && (
+          <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-red-200 p-6 space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div className="text-center space-y-2">
+                <h4 className="text-base font-bold text-slate-900">
+                  Xác nhận xóa câu hỏi khỏi Database
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Bạn có chắc chắn muốn xóa vĩnh viễn câu hỏi:
+                </p>
+                <p className="text-xs font-bold text-red-700 bg-red-50 p-2.5 rounded-xl border border-red-200 max-h-24 overflow-y-auto">
+                  "{questionToDelete.title}"
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Câu hỏi sẽ bị xóa hoàn toàn khỏi bảng <code className="font-mono font-bold">exam_questions</code>, các bảng con và bảng <code className="font-mono font-bold">question_bank</code> trên máy chủ Turso. Hành động này không thể hoàn tác!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingLoading}
+                  onClick={() => setQuestionToDelete(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingLoading}
+                  onClick={handleConfirmSingleDelete}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeletingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  <span>{isDeletingLoading ? 'Đang Xóa...' : 'Xác Nhận Xóa'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ================= MODAL XÁC NHẬN XÓA HÀNG LOẠT CÂU HỎI (ADMIN) ================= */}
+        {isBulkDeletingConfirm && (
+          <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-red-200 p-6 space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div className="text-center space-y-2">
+                <h4 className="text-base font-bold text-slate-900">
+                  Xóa hàng loạt {selectedIds.size} câu hỏi khỏi Database
+                </h4>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Bạn có chắc chắn muốn xóa vĩnh viễn <strong>{selectedIds.size}</strong> câu hỏi đã chọn khỏi cơ sở dữ liệu Turso và ngân hàng câu hỏi?
+                </p>
+                <p className="text-[11px] text-red-600 font-semibold bg-red-50 p-2 rounded-lg border border-red-200">
+                  ⚠️ Toàn bộ dữ liệu chi tiết, các phương án và hình ảnh liên kết của {selectedIds.size} câu hỏi này sẽ bị gỡ bỏ vĩnh viễn khỏi máy chủ!
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingLoading}
+                  onClick={() => setIsBulkDeletingConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Hủy Bỏ
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeletingLoading}
+                  onClick={handleConfirmBulkDelete}
+                  className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeletingLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  <span>{isDeletingLoading ? 'Đang Xóa...' : `Xóa ${selectedIds.size} Câu`}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

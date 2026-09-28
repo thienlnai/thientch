@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS exams (
 -- 6. BẢNG CHI TIẾT CÂU HỎI THI (exam_questions)
 CREATE TABLE IF NOT EXISTS exam_questions (
   id TEXT PRIMARY KEY,
-  examId TEXT NOT NULL,
+  examId TEXT,
   orderIndex INTEGER DEFAULT 0,
   type TEXT NOT NULL,
   title TEXT NOT NULL,
@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS exam_questions (
   fillBlankItems TEXT DEFAULT '[]',
   createdAt TEXT DEFAULT (datetime('now')),
   updatedAt TEXT DEFAULT (datetime('now')),
-  FOREIGN KEY (examId) REFERENCES exams(id) ON DELETE CASCADE
+  FOREIGN KEY (examId) REFERENCES exams(id) ON DELETE SET NULL
 );
 
 -- 7. BẢNG PHƯƠNG ÁN TRẮC NGHIỆM (question_options)

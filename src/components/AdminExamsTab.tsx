@@ -125,6 +125,9 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
   const [examToPrint, setExamToPrint] = useState<Exam | null>(null);
   const [printIncludeAnswers, setPrintIncludeAnswers] = useState(false);
 
+  // Question Bank Modal for Admin (browse & delete from DB)
+  const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
+
   // Helper mappings
   const classMap = useMemo(() => {
     const map = new Map<string, SchoolClass>();
@@ -472,6 +475,16 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
               </button>
             </div>
           )}
+
+          <button
+            type="button"
+            onClick={() => setIsQuestionBankOpen(true)}
+            className="px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+            title="Xem ngân hàng câu hỏi & Quản lý/Xóa câu hỏi khỏi Database"
+          >
+            <BookOpen className="w-4 h-4 text-indigo-600" />
+            <span>Ngân Hàng Câu Hỏi</span>
+          </button>
 
           <button
             type="button"
@@ -1711,6 +1724,13 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* ================= MODAL NGÂN HÀNG CÂU HỎI (QUYỀN ADMIN - QUẢN LÝ & XÓA CƠ SỞ DỮ LIỆU) ================= */}
+      <QuestionBankModal
+        isOpen={isQuestionBankOpen}
+        onClose={() => setIsQuestionBankOpen(false)}
+        isAdmin={true}
+      />
 
     </div>
   );

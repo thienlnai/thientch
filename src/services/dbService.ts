@@ -2184,6 +2184,15 @@ export async function addExam(data: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>
     // 2. Lưu chi tiết câu hỏi sang các bảng con
     if (processedQuestions.length > 0) {
       await saveExamQuestionsToMultiTables(examId, processedQuestions);
+      // 3. Tự động lưu vào bảng question_bank để đọc ngân hàng câu hỏi
+      await saveQuestionsToBank(processedQuestions, {
+        sourceExamId: examId,
+        sourceExamTitle: newExam.title,
+        subject: newExam.subject,
+        grade: newExam.grade,
+        creatorId: newExam.creatorId,
+        creatorName: newExam.creatorName,
+      });
     }
   }
 
@@ -2221,6 +2230,15 @@ export async function updateExam(id: string, data: Partial<Exam>): Promise<void>
     await safeDbUpdate(EXAMS_TABLE, updatedPayload, 'id', id);
     if (processedQuestions && processedQuestions.length > 0) {
       await saveExamQuestionsToMultiTables(id, processedQuestions);
+      // Đồng thời cập nhật vào question_bank
+      await saveQuestionsToBank(processedQuestions, {
+        sourceExamId: id,
+        sourceExamTitle: updatedPayload.title || data.title,
+        subject: updatedPayload.subject || data.subject,
+        grade: updatedPayload.grade || data.grade,
+        creatorId: updatedPayload.creatorId || data.creatorId,
+        creatorName: updatedPayload.creatorName || data.creatorName,
+      });
     }
   }
 }
@@ -2231,15 +2249,8 @@ export async function deleteExam(id: string): Promise<void> {
 
   if (isConfigured) {
     try {
-      // Xóa câu hỏi ở các bảng con
-      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE examId = ?`, [id]);
-      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE examId = ?`, [id]);
-      // Xóa đề thi
+      // Yêu cầu: Khi giáo viên xóa đề thi KHÔNG xóa chi tiết câu hỏi và ngân hàng câu hỏi.
+      // Chỉ xóa bản ghi đề thi trong bảng exams:
       await tursoExecute(`DELETE FROM "${EXAMS_TABLE}" WHERE id = ?`, [id]);
     } catch (err) {
       console.warn('deleteExam error:', err);
@@ -2256,19 +2267,111 @@ export async function deleteMultipleExams(ids: string[]): Promise<number> {
   if (isConfigured) {
     try {
       const placeholders = ids.map(() => '?').join(', ');
-      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE examId IN (${placeholders})`, ids);
-      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE examId IN (${placeholders})`, ids);
+      // Yêu cầu: Khi giáo viên xóa đề thi KHÔNG xóa chi tiết câu hỏi và ngân hàng câu hỏi.
+      // Chỉ xóa bản ghi đề thi trong bảng exams:
       await tursoExecute(`DELETE FROM "${EXAMS_TABLE}" WHERE id IN (${placeholders})`, ids);
     } catch (err) {
       console.warn('deleteMultipleExams error:', err);
     }
   }
   return ids.length;
+}
+
+/**
+ * Cho phép Admin xóa hoàn toàn câu hỏi khỏi database (exam_questions, question_bank và các bảng con)
+ */
+export async function deleteQuestionFromDatabase(questionId: string): Promise<boolean> {
+  if (!questionId) return false;
+
+  // 1. Cập nhật local question bank
+  localQuestionBank = localQuestionBank.filter((q) => q.id !== questionId);
+  saveLocalData(STORAGE_KEYS.questionBank, localQuestionBank);
+  notifyQuestionBank();
+
+  // 2. Cập nhật trong localExams nếu câu hỏi thuộc đề nào đó
+  localExams = localExams.map((exam) => {
+    if (exam.questions && exam.questions.some((q) => q.id === questionId)) {
+      const newQuestions = exam.questions.filter((q) => q.id !== questionId);
+      return {
+        ...exam,
+        questions: newQuestions,
+        questionIds: newQuestions.map((q) => q.id),
+        totalQuestions: newQuestions.length,
+      };
+    }
+    return exam;
+  });
+  notifyExams();
+
+  // 3. Xóa trên máy chủ Turso
+  if (isConfigured) {
+    try {
+      await tursoBatch([
+        { sql: `DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId = ? OR id LIKE ?`, args: [questionId, `${questionId}_%`] },
+        { sql: `DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE id = ?`, args: [questionId] },
+        { sql: `DELETE FROM "${QUESTION_BANK_TABLE}" WHERE id = ?`, args: [questionId] },
+      ]);
+    } catch (err) {
+      console.warn('deleteQuestionFromDatabase error:', err);
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Cho phép Admin xóa hàng loạt câu hỏi khỏi database
+ */
+export async function bulkDeleteQuestionsFromDatabase(questionIds: string[]): Promise<number> {
+  if (!questionIds || questionIds.length === 0) return 0;
+
+  const idSet = new Set(questionIds);
+
+  // 1. Cập nhật local question bank
+  localQuestionBank = localQuestionBank.filter((q) => !idSet.has(q.id));
+  saveLocalData(STORAGE_KEYS.questionBank, localQuestionBank);
+  notifyQuestionBank();
+
+  // 2. Cập nhật trong localExams
+  localExams = localExams.map((exam) => {
+    if (exam.questions && exam.questions.some((q) => idSet.has(q.id))) {
+      const newQuestions = exam.questions.filter((q) => !idSet.has(q.id));
+      return {
+        ...exam,
+        questions: newQuestions,
+        questionIds: newQuestions.map((q) => q.id),
+        totalQuestions: newQuestions.length,
+      };
+    }
+    return exam;
+  });
+  notifyExams();
+
+  // 3. Xóa trên máy chủ Turso
+  if (isConfigured) {
+    try {
+      const placeholders = questionIds.map(() => '?').join(', ');
+      await tursoBatch([
+        { sql: `DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE id IN (${placeholders})`, args: questionIds },
+        { sql: `DELETE FROM "${QUESTION_BANK_TABLE}" WHERE id IN (${placeholders})`, args: questionIds },
+      ]);
+    } catch (err) {
+      console.warn('bulkDeleteQuestionsFromDatabase error:', err);
+    }
+  }
+
+  return questionIds.length;
 }
 
 export async function mergeExams(

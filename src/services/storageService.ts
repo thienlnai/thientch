@@ -372,12 +372,13 @@ export async function processQuestionsImagesForStorage(
       // 3. Ảnh phương án trắc nghiệm (options[].imageUrl)
       if (Array.isArray(updatedQ.options) && updatedQ.options.length > 0) {
         updatedQ.options = await Promise.all(
-          updatedQ.options.map(async (opt) => {
-            if (isBase64Image(opt.imageUrl)) {
-              const rawUrl = await uploadImageToGitHub(opt.imageUrl!, 'options');
-              if (rawUrl && rawUrl !== opt.imageUrl) {
+          updatedQ.options.map(async (opt: any) => {
+            const currentImg = opt.imageUrl || opt.image;
+            if (isBase64Image(currentImg)) {
+              const rawUrl = await uploadImageToGitHub(currentImg, 'options');
+              if (rawUrl && rawUrl !== currentImg) {
                 totalUploaded++;
-                return { ...opt, imageUrl: rawUrl };
+                return { ...opt, imageUrl: rawUrl, image: rawUrl };
               }
             }
             return opt;
@@ -388,25 +389,31 @@ export async function processQuestionsImagesForStorage(
       // 4. Ảnh cặp ghép nối (matchingPairs[].leftImageUrl / rightImageUrl)
       if (Array.isArray(updatedQ.matchingPairs) && updatedQ.matchingPairs.length > 0) {
         updatedQ.matchingPairs = await Promise.all(
-          updatedQ.matchingPairs.map(async (pair) => {
-            let leftUrl = pair.leftImageUrl;
-            let rightUrl = pair.rightImageUrl;
+          updatedQ.matchingPairs.map(async (pair: any) => {
+            let leftUrl = pair.leftImageUrl || pair.leftImage;
+            let rightUrl = pair.rightImageUrl || pair.rightImage;
 
             if (isBase64Image(leftUrl)) {
-              const res = await uploadImageToGitHub(leftUrl!, 'matching');
+              const res = await uploadImageToGitHub(leftUrl, 'matching');
               if (res && res !== leftUrl) {
                 leftUrl = res;
                 totalUploaded++;
               }
             }
             if (isBase64Image(rightUrl)) {
-              const res = await uploadImageToGitHub(rightUrl!, 'matching');
+              const res = await uploadImageToGitHub(rightUrl, 'matching');
               if (res && res !== rightUrl) {
                 rightUrl = res;
                 totalUploaded++;
               }
             }
-            return { ...pair, leftImageUrl: leftUrl, rightImageUrl: rightUrl };
+            return {
+              ...pair,
+              leftImageUrl: leftUrl,
+              leftImage: leftUrl,
+              rightImageUrl: rightUrl,
+              rightImage: rightUrl,
+            };
           })
         );
       }
@@ -414,12 +421,13 @@ export async function processQuestionsImagesForStorage(
       // 5. Ảnh sắp xếp thứ tự (orderingItems[].imageUrl)
       if (Array.isArray(updatedQ.orderingItems) && updatedQ.orderingItems.length > 0) {
         updatedQ.orderingItems = await Promise.all(
-          updatedQ.orderingItems.map(async (item) => {
-            if (isBase64Image(item.imageUrl)) {
-              const rawUrl = await uploadImageToGitHub(item.imageUrl!, 'ordering');
-              if (rawUrl && rawUrl !== item.imageUrl) {
+          updatedQ.orderingItems.map(async (item: any) => {
+            const currentImg = item.imageUrl || item.image;
+            if (isBase64Image(currentImg)) {
+              const rawUrl = await uploadImageToGitHub(currentImg, 'ordering');
+              if (rawUrl && rawUrl !== currentImg) {
                 totalUploaded++;
-                return { ...item, imageUrl: rawUrl };
+                return { ...item, imageUrl: rawUrl, image: rawUrl };
               }
             }
             return item;
