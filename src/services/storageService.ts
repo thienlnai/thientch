@@ -372,6 +372,7 @@ export async function processQuestionsImagesForStorage(
       // 3. Ảnh phương án trắc nghiệm (options[].imageUrl)
       if (Array.isArray(updatedQ.options) && updatedQ.options.length > 0) {
         updatedQ.options = await Promise.all(
+<<<<<<< HEAD
           updatedQ.options.map(async (opt: any) => {
             const currentImg = opt.imageUrl || opt.image;
             if (isBase64Image(currentImg)) {
@@ -379,6 +380,14 @@ export async function processQuestionsImagesForStorage(
               if (rawUrl && rawUrl !== currentImg) {
                 totalUploaded++;
                 return { ...opt, imageUrl: rawUrl, image: rawUrl };
+=======
+          updatedQ.options.map(async (opt) => {
+            if (isBase64Image(opt.imageUrl)) {
+              const rawUrl = await uploadImageToGitHub(opt.imageUrl!, 'options');
+              if (rawUrl && rawUrl !== opt.imageUrl) {
+                totalUploaded++;
+                return { ...opt, imageUrl: rawUrl };
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
               }
             }
             return opt;
@@ -389,24 +398,38 @@ export async function processQuestionsImagesForStorage(
       // 4. Ảnh cặp ghép nối (matchingPairs[].leftImageUrl / rightImageUrl)
       if (Array.isArray(updatedQ.matchingPairs) && updatedQ.matchingPairs.length > 0) {
         updatedQ.matchingPairs = await Promise.all(
+<<<<<<< HEAD
           updatedQ.matchingPairs.map(async (pair: any) => {
             let leftUrl = pair.leftImageUrl || pair.leftImage;
             let rightUrl = pair.rightImageUrl || pair.rightImage;
 
             if (isBase64Image(leftUrl)) {
               const res = await uploadImageToGitHub(leftUrl, 'matching');
+=======
+          updatedQ.matchingPairs.map(async (pair) => {
+            let leftUrl = pair.leftImageUrl;
+            let rightUrl = pair.rightImageUrl;
+
+            if (isBase64Image(leftUrl)) {
+              const res = await uploadImageToGitHub(leftUrl!, 'matching');
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
               if (res && res !== leftUrl) {
                 leftUrl = res;
                 totalUploaded++;
               }
             }
             if (isBase64Image(rightUrl)) {
+<<<<<<< HEAD
               const res = await uploadImageToGitHub(rightUrl, 'matching');
+=======
+              const res = await uploadImageToGitHub(rightUrl!, 'matching');
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
               if (res && res !== rightUrl) {
                 rightUrl = res;
                 totalUploaded++;
               }
             }
+<<<<<<< HEAD
             return {
               ...pair,
               leftImageUrl: leftUrl,
@@ -414,6 +437,9 @@ export async function processQuestionsImagesForStorage(
               rightImageUrl: rightUrl,
               rightImage: rightUrl,
             };
+=======
+            return { ...pair, leftImageUrl: leftUrl, rightImageUrl: rightUrl };
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
           })
         );
       }
@@ -421,6 +447,7 @@ export async function processQuestionsImagesForStorage(
       // 5. Ảnh sắp xếp thứ tự (orderingItems[].imageUrl)
       if (Array.isArray(updatedQ.orderingItems) && updatedQ.orderingItems.length > 0) {
         updatedQ.orderingItems = await Promise.all(
+<<<<<<< HEAD
           updatedQ.orderingItems.map(async (item: any) => {
             const currentImg = item.imageUrl || item.image;
             if (isBase64Image(currentImg)) {
@@ -428,6 +455,14 @@ export async function processQuestionsImagesForStorage(
               if (rawUrl && rawUrl !== currentImg) {
                 totalUploaded++;
                 return { ...item, imageUrl: rawUrl, image: rawUrl };
+=======
+          updatedQ.orderingItems.map(async (item) => {
+            if (isBase64Image(item.imageUrl)) {
+              const rawUrl = await uploadImageToGitHub(item.imageUrl!, 'ordering');
+              if (rawUrl && rawUrl !== item.imageUrl) {
+                totalUploaded++;
+                return { ...item, imageUrl: rawUrl };
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
               }
             }
             return item;

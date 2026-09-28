@@ -125,9 +125,12 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
   const [examToPrint, setExamToPrint] = useState<Exam | null>(null);
   const [printIncludeAnswers, setPrintIncludeAnswers] = useState(false);
 
+<<<<<<< HEAD
   // Question Bank Modal for Admin (browse & delete from DB)
   const [isQuestionBankOpen, setIsQuestionBankOpen] = useState(false);
 
+=======
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
   // Helper mappings
   const classMap = useMemo(() => {
     const map = new Map<string, SchoolClass>();
@@ -478,6 +481,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
 
           <button
             type="button"
+<<<<<<< HEAD
             onClick={() => setIsQuestionBankOpen(true)}
             className="px-3.5 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
             title="Xem ngân hàng câu hỏi & Quản lý/Xóa câu hỏi khỏi Database"
@@ -488,6 +492,8 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
 
           <button
             type="button"
+=======
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
             onClick={handleOpenMergeModal}
             className="px-3.5 py-2 rounded-xl text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
             title="Gộp từ 2 đề thi trở lên thành đề thi tổng hợp lớn"
@@ -1725,6 +1731,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
         </div>
       )}
 
+<<<<<<< HEAD
       {/* ================= MODAL NGÂN HÀNG CÂU HỎI (QUYỀN ADMIN - QUẢN LÝ & XÓA CƠ SỞ DỮ LIỆU) ================= */}
       <QuestionBankModal
         isOpen={isQuestionBankOpen}
@@ -1732,6 +1739,8 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
         isAdmin={true}
       />
 
+=======
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
     </div>
   );
 };

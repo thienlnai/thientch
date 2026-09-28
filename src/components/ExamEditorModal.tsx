@@ -47,12 +47,16 @@ import {
   GraduationCap
 } from 'lucide-react';
 import { compressImageFile, optimizeExamQuestions, estimateExamPayloadSize } from '../utils/imageOptimizer.ts';
+<<<<<<< HEAD
 import { 
   uploadImageToSupabaseStorage, 
   uploadVideoToSupabaseStorage,
   uploadImageToGitHub,
   isGitHubConfigured 
 } from '../services/storageService.ts';
+=======
+import { uploadImageToSupabaseStorage, uploadVideoToSupabaseStorage } from '../services/storageService.ts';
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
 import { isConfigured } from '../turso.ts';
 import { QuestionBankModal } from './QuestionBankModal.tsx';
 import { 
@@ -183,12 +187,21 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
       // 1. Tối ưu ảnh sang chuẩn WebP sắc nét (< 80KB)
       const compressed = await compressImageFile(file, 1280, 1280, 0.82);
 
+<<<<<<< HEAD
       // 2. Nếu có kết nối GitHub, tải trực tiếp lên GitHub Storage (lưu Raw URL)
       if (isGitHubConfigured()) {
         setIsUploadingToStorage(true);
         setStorageStatusMsg('Đang tải ảnh lên GitHub Repository...');
         try {
           const publicUrl = await uploadImageToGitHub(compressed, folder);
+=======
+      // 2. Nếu có kết nối, tải trực tiếp lên GitHub Storage (lưu Raw URL)
+      if (isConfigured) {
+        setIsUploadingToStorage(true);
+        setStorageStatusMsg('Đang tải ảnh lên GitHub Repository...');
+        try {
+          const publicUrl = await uploadImageToSupabaseStorage(compressed, folder);
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
           if (publicUrl && (publicUrl.startsWith('http://') || publicUrl.startsWith('https://'))) {
             onLoaded(publicUrl);
             setStorageStatusMsg('✓ Đã lưu ảnh vào GitHub (Raw URL)!');
@@ -224,7 +237,11 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
     if (file.size > 25 * 1024 * 1024) {
       alert('Khuyến nghị: Với video trên 25MB, hãy sử dụng đường dẫn URL YouTube hoặc đám mây để học sinh tải nhanh nhất!');
     }
+<<<<<<< HEAD
     if (isGitHubConfigured() && file.size <= 25 * 1024 * 1024) {
+=======
+    if (isConfigured && file.size <= 25 * 1024 * 1024) {
+>>>>>>> b0df5fc278d0b4675a1c33dc3bb15a73ea48c8b8
       setIsUploadingToStorage(true);
       setStorageStatusMsg('Đang tải video lên GitHub Storage...');
       try {
