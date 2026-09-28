@@ -447,33 +447,234 @@ export function toDbExamRow(e: any, _isPartial = false): any {
   return row;
 }
 
-export function toDbExamQuestionRow(q: any, examId: string, orderIndex: number): any {
+export function toDbExamQuestionRow(q: any, examId: string, orderIndex?: number, isPartial = false): any {
   if (!q || typeof q !== 'object') return q;
-  return {
-    id: String(q.id || `q_${examId}_${orderIndex}_${Math.random().toString(36).slice(2, 6)}`),
-    examId: String(q.examId || examId),
-    orderIndex: Number(q.orderIndex ?? orderIndex),
-    type: q.type || 'single_choice',
-    title: q.title || '',
-    mediaType: q.mediaType || 'none',
-    mediaUrl: q.mediaUrl || null,
-    explanation: q.explanation || null,
-    options: typeof q.options === 'string' ? q.options : JSON.stringify(q.options || []),
-    correctOptionId: q.correctOptionId || null,
-    correctOptionIds: typeof q.correctOptionIds === 'string' ? q.correctOptionIds : JSON.stringify(q.correctOptionIds || []),
-    matchingPairs: typeof q.matchingPairs === 'string' ? q.matchingPairs : JSON.stringify(q.matchingPairs || []),
-    shuffledRightPairs: typeof q.shuffledRightPairs === 'string' ? q.shuffledRightPairs : JSON.stringify(q.shuffledRightPairs || []),
-    orderingItems: typeof q.orderingItems === 'string' ? q.orderingItems : JSON.stringify(q.orderingItems || []),
-    trueLabel: q.trueLabel || 'Đúng',
-    falseLabel: q.falseLabel || 'Sai',
-    tfStatements: typeof q.tfStatements === 'string' ? q.tfStatements : JSON.stringify(q.tfStatements || []),
-    shuffledTfColumns: typeof q.shuffledTfColumns === 'string' ? q.shuffledTfColumns : JSON.stringify(q.shuffledTfColumns || []),
-    hotspotImageUrl: q.hotspotImageUrl || null,
-    hotspotRegions: typeof q.hotspotRegions === 'string' ? q.hotspotRegions : JSON.stringify(q.hotspotRegions || []),
-    fillBlankTemplate: q.fillBlankTemplate || null,
-    fillBlankItems: typeof q.fillBlankItems === 'string' ? q.fillBlankItems : JSON.stringify(q.fillBlankItems || []),
-    updatedAt: new Date().toISOString(),
-  };
+  const row: any = {};
+  if (q.id !== undefined) row.id = String(q.id);
+  else if (!isPartial) row.id = `q_${examId}_${orderIndex ?? 0}_${Math.random().toString(36).slice(2, 6)}`;
+
+  if (q.examId !== undefined || examId) row.examId = String(q.examId || examId);
+  if (q.orderIndex !== undefined || orderIndex !== undefined) row.orderIndex = Number(q.orderIndex ?? orderIndex ?? 0);
+  if (q.type !== undefined || !isPartial) row.type = q.type || 'single_choice';
+  if (q.title !== undefined || !isPartial) row.title = q.title || '';
+  if (q.mediaType !== undefined || !isPartial) row.mediaType = q.mediaType || 'none';
+  if (q.mediaUrl !== undefined || !isPartial) row.mediaUrl = q.mediaUrl || null;
+  if (q.explanation !== undefined || !isPartial) row.explanation = q.explanation || null;
+  if (q.options !== undefined || !isPartial) {
+    row.options = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || []);
+  }
+  if (q.correctOptionId !== undefined || !isPartial) row.correctOptionId = q.correctOptionId || null;
+  if (q.correctOptionIds !== undefined || !isPartial) {
+    row.correctOptionIds = typeof q.correctOptionIds === 'string' ? q.correctOptionIds : JSON.stringify(q.correctOptionIds || []);
+  }
+  if (q.matchingPairs !== undefined || !isPartial) {
+    row.matchingPairs = typeof q.matchingPairs === 'string' ? q.matchingPairs : JSON.stringify(q.matchingPairs || []);
+  }
+  if (q.shuffledRightPairs !== undefined || !isPartial) {
+    row.shuffledRightPairs = typeof q.shuffledRightPairs === 'string' ? q.shuffledRightPairs : JSON.stringify(q.shuffledRightPairs || []);
+  }
+  if (q.orderingItems !== undefined || !isPartial) {
+    row.orderingItems = typeof q.orderingItems === 'string' ? q.orderingItems : JSON.stringify(q.orderingItems || []);
+  }
+  if (q.trueLabel !== undefined || !isPartial) row.trueLabel = q.trueLabel || 'Đúng';
+  if (q.falseLabel !== undefined || !isPartial) row.falseLabel = q.falseLabel || 'Sai';
+  if (q.tfStatements !== undefined || !isPartial) {
+    row.tfStatements = typeof q.tfStatements === 'string' ? q.tfStatements : JSON.stringify(q.tfStatements || []);
+  }
+  if (q.shuffledTfColumns !== undefined || !isPartial) {
+    row.shuffledTfColumns = typeof q.shuffledTfColumns === 'string' ? q.shuffledTfColumns : JSON.stringify(q.shuffledTfColumns || []);
+  }
+  if (q.hotspotImageUrl !== undefined || !isPartial) row.hotspotImageUrl = q.hotspotImageUrl || null;
+  if (q.hotspotRegions !== undefined || !isPartial) {
+    row.hotspotRegions = typeof q.hotspotRegions === 'string' ? q.hotspotRegions : JSON.stringify(q.hotspotRegions || []);
+  }
+  if (q.fillBlankTemplate !== undefined || !isPartial) row.fillBlankTemplate = q.fillBlankTemplate || null;
+  if (q.fillBlankItems !== undefined || !isPartial) {
+    row.fillBlankItems = typeof q.fillBlankItems === 'string' ? q.fillBlankItems : JSON.stringify(q.fillBlankItems || []);
+  }
+  if (q.updatedAt !== undefined || !isPartial) row.updatedAt = q.updatedAt || new Date().toISOString();
+  if (q.createdAt !== undefined) row.createdAt = q.createdAt;
+
+  return row;
+}
+
+export function toDbQuestionBankRow(q: any, isPartial = false): any {
+  if (!q || typeof q !== 'object') return q;
+  const row: any = {};
+  if (q.id !== undefined || !isPartial) row.id = String(q.id || '');
+  if (q.type !== undefined || !isPartial) row.type = q.type || 'single_choice';
+  if (q.title !== undefined || !isPartial) row.title = String(q.title || '');
+  if (q.mediaType !== undefined || !isPartial) row.mediaType = q.mediaType || 'none';
+  if (q.mediaUrl !== undefined || !isPartial) row.mediaUrl = q.mediaUrl || null;
+  if (q.explanation !== undefined || !isPartial) row.explanation = q.explanation || null;
+  if (q.options !== undefined || !isPartial) {
+    row.options = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || []);
+  }
+  if (q.correctOptionId !== undefined || !isPartial) row.correctOptionId = q.correctOptionId || null;
+  if (q.correctOptionIds !== undefined || !isPartial) {
+    row.correctOptionIds = typeof q.correctOptionIds === 'string' ? q.correctOptionIds : JSON.stringify(q.correctOptionIds || []);
+  }
+  if (q.matchingPairs !== undefined || !isPartial) {
+    row.matchingPairs = typeof q.matchingPairs === 'string' ? q.matchingPairs : JSON.stringify(q.matchingPairs || []);
+  }
+  if (q.shuffledRightPairs !== undefined || !isPartial) {
+    row.shuffledRightPairs = typeof q.shuffledRightPairs === 'string' ? q.shuffledRightPairs : JSON.stringify(q.shuffledRightPairs || []);
+  }
+  if (q.orderingItems !== undefined || !isPartial) {
+    row.orderingItems = typeof q.orderingItems === 'string' ? q.orderingItems : JSON.stringify(q.orderingItems || []);
+  }
+  if (q.trueLabel !== undefined || !isPartial) row.trueLabel = q.trueLabel || 'Đúng';
+  if (q.falseLabel !== undefined || !isPartial) row.falseLabel = q.falseLabel || 'Sai';
+  if (q.tfStatements !== undefined || !isPartial) {
+    row.tfStatements = typeof q.tfStatements === 'string' ? q.tfStatements : JSON.stringify(q.tfStatements || []);
+  }
+  if (q.shuffledTfColumns !== undefined || !isPartial) {
+    row.shuffledTfColumns = typeof q.shuffledTfColumns === 'string' ? q.shuffledTfColumns : JSON.stringify(q.shuffledTfColumns || []);
+  }
+  if (q.hotspotImageUrl !== undefined || !isPartial) row.hotspotImageUrl = q.hotspotImageUrl || null;
+  if (q.hotspotRegions !== undefined || !isPartial) {
+    row.hotspotRegions = typeof q.hotspotRegions === 'string' ? q.hotspotRegions : JSON.stringify(q.hotspotRegions || []);
+  }
+  if (q.fillBlankTemplate !== undefined || !isPartial) row.fillBlankTemplate = q.fillBlankTemplate || null;
+  if (q.fillBlankItems !== undefined || !isPartial) {
+    row.fillBlankItems = typeof q.fillBlankItems === 'string' ? q.fillBlankItems : JSON.stringify(q.fillBlankItems || []);
+  }
+  if (q.sourceExamId !== undefined) row.sourceExamId = q.sourceExamId || null;
+  if (q.sourceExamTitle !== undefined) row.sourceExamTitle = q.sourceExamTitle || null;
+  if (q.subject !== undefined) row.subject = q.subject || 'Công nghệ Thông tin';
+  if (q.grade !== undefined) row.grade = q.grade || 'Khối 12';
+  if (q.creatorId !== undefined) row.creatorId = q.creatorId || null;
+  if (q.creatorName !== undefined) row.creatorName = q.creatorName || null;
+  if (q.updatedAt !== undefined || !isPartial) row.updatedAt = q.updatedAt || new Date().toISOString();
+  if (q.createdAt !== undefined) row.createdAt = q.createdAt;
+  return row;
+}
+
+/**
+ * Kiểm tra xem nội dung của một câu hỏi có bị thay đổi giữa phiên bản cũ và mới hay không.
+ * Phục vụ cập nhật vi sai (Delta Update) - Chỉ UPDATE câu hỏi bị sửa, không chạm vào câu hỏi khác.
+ */
+export function isQuestionContentModified(qOld: ExamQuestion, qNew: ExamQuestion): boolean {
+  if (!qOld || !qNew) return true;
+  if ((qOld.type || 'single_choice') !== (qNew.type || 'single_choice')) return true;
+  if ((qOld.title || '').trim() !== (qNew.title || '').trim()) return true;
+  if ((qOld.mediaType || 'none') !== (qNew.mediaType || 'none')) return true;
+  if ((qOld.mediaUrl || null) !== (qNew.mediaUrl || null)) return true;
+  if ((qOld.explanation || null) !== (qNew.explanation || null)) return true;
+  if ((qOld.correctOptionId || null) !== (qNew.correctOptionId || null)) return true;
+  if ((qOld.trueLabel || 'Đúng') !== (qNew.trueLabel || 'Đúng')) return true;
+  if ((qOld.falseLabel || 'Sai') !== (qNew.falseLabel || 'Sai')) return true;
+  if ((qOld.hotspotImageUrl || null) !== (qNew.hotspotImageUrl || null)) return true;
+  if ((qOld.fillBlankTemplate || null) !== (qNew.fillBlankTemplate || null)) return true;
+
+  // So sánh correctOptionIds
+  const oldIds = Array.isArray(qOld.correctOptionIds) ? [...qOld.correctOptionIds].sort() : [];
+  const newIds = Array.isArray(qNew.correctOptionIds) ? [...qNew.correctOptionIds].sort() : [];
+  if (oldIds.length !== newIds.length || oldIds.some((v, idx) => v !== newIds[idx])) return true;
+
+  // So sánh options
+  const oldOpts = Array.isArray(qOld.options) ? qOld.options : [];
+  const newOpts = Array.isArray(qNew.options) ? qNew.options : [];
+  if (oldOpts.length !== newOpts.length) return true;
+  for (let i = 0; i < oldOpts.length; i++) {
+    const o1 = oldOpts[i];
+    const o2 = newOpts[i];
+    if (
+      o1.id !== o2.id ||
+      (o1.text || '').trim() !== (o2.text || '').trim() ||
+      (o1.imageUrl || null) !== (o2.imageUrl || null)
+    ) {
+      return true;
+    }
+  }
+
+  // So sánh matchingPairs
+  const oldPairs = Array.isArray(qOld.matchingPairs) ? qOld.matchingPairs : [];
+  const newPairs = Array.isArray(qNew.matchingPairs) ? qNew.matchingPairs : [];
+  if (oldPairs.length !== newPairs.length) return true;
+  for (let i = 0; i < oldPairs.length; i++) {
+    const p1 = oldPairs[i];
+    const p2 = newPairs[i];
+    if (
+      p1.id !== p2.id ||
+      (p1.leftText || '').trim() !== (p2.leftText || '').trim() ||
+      (p1.leftImageUrl || null) !== (p2.leftImageUrl || null) ||
+      (p1.rightText || '').trim() !== (p2.rightText || '').trim() ||
+      (p1.rightImageUrl || null) !== (p2.rightImageUrl || null)
+    ) {
+      return true;
+    }
+  }
+
+  // So sánh orderingItems
+  const oldOrd = Array.isArray(qOld.orderingItems) ? qOld.orderingItems : [];
+  const newOrd = Array.isArray(qNew.orderingItems) ? qNew.orderingItems : [];
+  if (oldOrd.length !== newOrd.length) return true;
+  for (let i = 0; i < oldOrd.length; i++) {
+    const it1 = oldOrd[i];
+    const it2 = newOrd[i];
+    if (
+      it1.id !== it2.id ||
+      (it1.text || '').trim() !== (it2.text || '').trim() ||
+      (it1.imageUrl || null) !== (it2.imageUrl || null)
+    ) {
+      return true;
+    }
+  }
+
+  // So sánh tfStatements
+  const oldTf = Array.isArray(qOld.tfStatements) ? qOld.tfStatements : [];
+  const newTf = Array.isArray(qNew.tfStatements) ? qNew.tfStatements : [];
+  if (oldTf.length !== newTf.length) return true;
+  for (let i = 0; i < oldTf.length; i++) {
+    const t1 = oldTf[i];
+    const t2 = newTf[i];
+    if (
+      t1.id !== t2.id ||
+      (t1.statement || '').trim() !== (t2.statement || '').trim() ||
+      Boolean(t1.isTrue) !== Boolean(t2.isTrue)
+    ) {
+      return true;
+    }
+  }
+
+  // So sánh fillBlankItems
+  const oldFb = Array.isArray(qOld.fillBlankItems) ? qOld.fillBlankItems : [];
+  const newFb = Array.isArray(qNew.fillBlankItems) ? qNew.fillBlankItems : [];
+  if (oldFb.length !== newFb.length) return true;
+  for (let i = 0; i < oldFb.length; i++) {
+    const f1 = oldFb[i];
+    const f2 = newFb[i];
+    if (
+      f1.id !== f2.id ||
+      f1.placeholderCode !== f2.placeholderCode ||
+      (f1.correctAnswer || '').trim() !== (f2.correctAnswer || '').trim() ||
+      JSON.stringify(f1.options || []) !== JSON.stringify(f2.options || [])
+    ) {
+      return true;
+    }
+  }
+
+  // So sánh hotspotRegions
+  const oldHs = Array.isArray(qOld.hotspotRegions) ? qOld.hotspotRegions : [];
+  const newHs = Array.isArray(qNew.hotspotRegions) ? qNew.hotspotRegions : [];
+  if (oldHs.length !== newHs.length) return true;
+  for (let i = 0; i < oldHs.length; i++) {
+    const h1 = oldHs[i];
+    const h2 = newHs[i];
+    if (
+      h1.id !== h2.id ||
+      h1.x !== h2.x ||
+      h1.y !== h2.y ||
+      h1.width !== h2.width ||
+      h1.height !== h2.height ||
+      (h1.label || null) !== (h2.label || null)
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function toDbQuestionOptionRow(opt: any, questionId: string, examId: string, orderIndex: number, isCorrect = false): any {
@@ -671,7 +872,10 @@ export function prepareDbPayload(table: string, payload: any, isPartial = false)
   if (table === SCHOOLS_TABLE) return toDbSchoolRow(payload, isPartial);
   if (table === EXAMS_TABLE) return toDbExamRow(payload, isPartial);
   if (table === EXAM_QUESTIONS_TABLE) {
-    return toDbExamQuestionRow(payload, payload.examId || '', payload.orderIndex || 0);
+    return toDbExamQuestionRow(payload, payload.examId || '', payload.orderIndex, isPartial);
+  }
+  if (table === QUESTION_BANK_TABLE) {
+    return toDbQuestionBankRow(payload, isPartial);
   }
   if (table === QUESTION_OPTIONS_TABLE) {
     return toDbQuestionOptionRow(payload, payload.questionId || '', payload.examId || '', payload.orderIndex || 0, payload.isCorrect);
@@ -1142,8 +1346,7 @@ export async function saveExamQuestionsToMultiTables(
   const hotspotRows: any[] = [];
 
   questions.forEach((q, qIdx) => {
-    const rawQId = String(q.id || `q_${qIdx + 1}`).trim();
-    const cleanQId = rawQId.startsWith(`${examId}_`) ? rawQId : `${examId}_${rawQId}`;
+    const cleanQId = String(q.id || `q_${examId}_${qIdx + 1}_${Date.now()}`).trim();
     const qRow = toDbExamQuestionRow({ ...q, id: cleanQId }, examId, qIdx);
     questionRows.push(qRow);
 
@@ -2236,6 +2439,12 @@ export async function addExam(data: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>
     console.warn('[GitHub Storage] Lỗi xử lý ảnh câu hỏi khi tạo đề:', storageErr);
   }
 
+  // Đảm bảo mỗi câu hỏi có ID cố định ngay từ đầu
+  processedQuestions = processedQuestions.map((q, qIdx) => {
+    const qId = String(q.id || `q_${examId}_${qIdx + 1}_${Math.random().toString(36).slice(2, 7)}`).trim();
+    return { ...q, id: qId, examId };
+  });
+
   const questionIds = processedQuestions.map((q) => q.id);
 
   const newExam: Exam = {
@@ -2273,8 +2482,280 @@ export async function addExam(data: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>
   return newExam;
 }
 
+/**
+ * Cập nhật vi sai (Delta Update) danh sách câu hỏi đề thi:
+ * - Khi giáo viên chỉnh sửa một câu hỏi cụ thể (ví dụ: Câu 10), hệ thống CHỈ UPDATE riêng câu hỏi đó
+ *   trong cơ sở dữ liệu bằng cách sử dụng ID hiện có của nó (câu lệnh UPDATE).
+ * - Tuyệt đối KHÔNG xóa và tạo lại toàn bộ câu hỏi.
+ * - KHÔNG tạo ID câu hỏi mới hoặc tạo bản ghi trùng lặp trong question_bank, exam_questions hay các bảng con.
+ * - Tất cả các câu hỏi khác (từ 1 đến 9, 11 đến 15) được giữ nguyên hoàn toàn, bảo toàn ID gốc và các mối quan hệ ban đầu.
+ */
+export async function updateExamQuestionsDelta(
+  examId: string,
+  incomingQuestions: ExamQuestion[],
+  examMeta?: {
+    title?: string;
+    subject?: string;
+    grade?: string;
+    creatorId?: string;
+    creatorName?: string;
+  },
+  existingQuestionsFallback?: ExamQuestion[]
+): Promise<{
+  updatedCount: number;
+  insertedCount: number;
+  deletedCount: number;
+  unchangedCount: number;
+}> {
+  if (!isConfigured) {
+    return { updatedCount: 0, insertedCount: 0, deletedCount: 0, unchangedCount: 0 };
+  }
+
+  const now = new Date().toISOString();
+
+  // 1. Xác định danh sách câu hỏi hiện có của đề thi trước khi chỉnh sửa
+  let existingQuestions: ExamQuestion[] = [];
+  if (existingQuestionsFallback && existingQuestionsFallback.length > 0) {
+    existingQuestions = existingQuestionsFallback;
+  } else {
+    const localMatch = localExams.find((e) => e.id === examId);
+    if (localMatch?.questions && localMatch.questions.length > 0) {
+      existingQuestions = localMatch.questions;
+    } else {
+      try {
+        const qRows = await tursoQuery(
+          `SELECT * FROM ${EXAM_QUESTIONS_TABLE} WHERE examId = ? ORDER BY orderIndex ASC`,
+          [examId]
+        );
+        if (Array.isArray(qRows) && qRows.length > 0) {
+          existingQuestions = qRows.map((r) => normalizeExamQuestion(r, examId));
+        }
+      } catch (err) {
+        console.warn('[Turso] Không thể đọc danh sách câu hỏi cũ từ DB:', err);
+      }
+    }
+  }
+
+  const existingMap = new Map<string, ExamQuestion>();
+  existingQuestions.forEach((q) => {
+    if (q && q.id) {
+      existingMap.set(String(q.id).trim(), q);
+    }
+  });
+
+  const incomingIds = new Set<string>();
+  let updatedCount = 0;
+  let insertedCount = 0;
+  let unchangedCount = 0;
+  let deletedCount = 0;
+
+  // 2. Duyệt từng câu hỏi gửi lên
+  for (let qIdx = 0; qIdx < incomingQuestions.length; qIdx++) {
+    const q = incomingQuestions[qIdx];
+    const qId = String(q.id || `q_${examId}_${qIdx + 1}_${Date.now()}`).trim();
+    incomingIds.add(qId);
+
+    const oldQ = existingMap.get(qId);
+
+    if (oldQ) {
+      // Câu hỏi đã có sẵn trong đề thi (ví dụ: Câu 1 -> 9, Câu 10, Câu 11 -> 15)
+      const contentChanged = isQuestionContentModified(oldQ, q);
+      const orderChanged = (oldQ.orderIndex ?? -1) !== qIdx;
+
+      if (!contentChanged && !orderChanged) {
+        // CÂU HỎI HOÀN TOÀN KHÔNG BỊ SỬA (như Câu 1 đến 9, Câu 11 đến 15):
+        // GIỮ NGUYÊN HOÀN TOÀN, BẢO TOÀN ID GỐC, KHÔNG ĐỤNG CHẠM GÌ ĐẾN CSDL!
+        unchangedCount++;
+        continue;
+      }
+
+      if (contentChanged) {
+        // CÂU HỎI BỊ CHỈNH SỬA (như Câu 10):
+        // 1. Chỉ UPDATE riêng câu hỏi này trong exam_questions bằng ID hiện có (UPDATE ... WHERE id = ?)
+        const updatedQRow = toDbExamQuestionRow({ ...q, id: qId, examId, orderIndex: qIdx }, examId, qIdx);
+        updatedQRow.updatedAt = now;
+        await safeDbUpdate(EXAM_QUESTIONS_TABLE, updatedQRow, 'id', qId);
+
+        // 2. Làm mới bảng con (options, matching...) của RIÊNG câu hỏi qId này
+        // Tuyệt đối không xóa hay ảnh hưởng đến bất kỳ câu hỏi nào khác!
+        await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId = ?`, [qId]);
+        await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId = ?`, [qId]);
+        await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId = ?`, [qId]);
+        await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId = ?`, [qId]);
+        await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId = ?`, [qId]);
+        await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId = ?`, [qId]);
+
+        // Ghi lại bảng con tương ứng với dạng câu hỏi cho đúng ID qId
+        if (q.options && Array.isArray(q.options)) {
+          const optRows = q.options.map((opt, optIdx) => {
+            const isCorrect =
+              opt.id === q.correctOptionId ||
+              (Array.isArray(q.correctOptionIds) && q.correctOptionIds.includes(opt.id));
+            return toDbQuestionOptionRow(opt, qId, examId, optIdx, isCorrect);
+          });
+          if (optRows.length > 0) await safeDbUpsert(QUESTION_OPTIONS_TABLE, optRows);
+        }
+
+        if (q.matchingPairs && Array.isArray(q.matchingPairs)) {
+          const matchingRows = q.matchingPairs.map((pair, pairIdx) =>
+            toDbQuestionMatchingPairRow(pair, qId, examId, pairIdx)
+          );
+          if (matchingRows.length > 0) await safeDbUpsert(QUESTION_MATCHING_PAIRS_TABLE, matchingRows);
+        }
+
+        if (q.orderingItems && Array.isArray(q.orderingItems)) {
+          const ordRows = q.orderingItems.map((ord, ordIdx) =>
+            toDbQuestionOrderingItemRow(ord, qId, examId, ordIdx)
+          );
+          if (ordRows.length > 0) await safeDbUpsert(QUESTION_ORDERING_ITEMS_TABLE, ordRows);
+        }
+
+        if (q.tfStatements && Array.isArray(q.tfStatements)) {
+          const tfRows = q.tfStatements.map((tf, tfIdx) =>
+            toDbQuestionTfStatementRow(tf, qId, examId, tfIdx)
+          );
+          if (tfRows.length > 0) await safeDbUpsert(QUESTION_TF_STATEMENTS_TABLE, tfRows);
+        }
+
+        if (q.fillBlankItems && Array.isArray(q.fillBlankItems)) {
+          const fbRows = q.fillBlankItems.map((fb, fbIdx) =>
+            toDbQuestionFillBlankItemRow(fb, qId, examId, fbIdx)
+          );
+          if (fbRows.length > 0) await safeDbUpsert(QUESTION_FILL_BLANK_ITEMS_TABLE, fbRows);
+        }
+
+        if (q.hotspotRegions && Array.isArray(q.hotspotRegions)) {
+          const hsRows = q.hotspotRegions.map((hs, hsIdx) =>
+            toDbQuestionHotspotRow(hs, qId, examId, hsIdx)
+          );
+          if (hsRows.length > 0) await safeDbUpsert(QUESTION_HOTSPOTS_TABLE, hsRows);
+        }
+
+        // 3. Cập nhật RIÊNG câu hỏi này trong question_bank nếu đã có trong ngân hàng
+        // Bằng lệnh UPDATE theo ID hiện có (UPDATE ... WHERE id = ?)
+        // Tuyệt đối không tạo bản ghi mới hoặc trùng lặp đối với câu hỏi chưa sửa!
+        const bankPayload = toDbQuestionBankRow({
+          ...q,
+          id: qId,
+          sourceExamId: examId,
+          sourceExamTitle: examMeta?.title || oldQ.sourceExamTitle,
+          subject: examMeta?.subject || oldQ.subject || 'Công nghệ Thông tin',
+          grade: examMeta?.grade || oldQ.grade || 'Khối 12',
+          creatorId: examMeta?.creatorId || oldQ.creatorId,
+          creatorName: examMeta?.creatorName || oldQ.creatorName,
+          updatedAt: now,
+        });
+
+        const existsInBank = localQuestionBank.some((b) => b.id === qId);
+        if (existsInBank) {
+          await safeDbUpdate(QUESTION_BANK_TABLE, bankPayload, 'id', qId);
+          localQuestionBank = localQuestionBank.map((b) =>
+            b.id === qId ? { ...b, ...bankPayload, options: q.options, matchingPairs: q.matchingPairs, orderingItems: q.orderingItems, tfStatements: q.tfStatements, hotspotRegions: q.hotspotRegions, fillBlankItems: q.fillBlankItems } : b
+          );
+        } else {
+          await safeDbUpsert(QUESTION_BANK_TABLE, [bankPayload]);
+          localQuestionBank = [...localQuestionBank, { ...q, ...bankPayload, id: qId }];
+        }
+        saveLocalData(STORAGE_KEYS.questionBank, localQuestionBank);
+        notifyQuestionBank();
+
+        updatedCount++;
+      } else if (orderChanged) {
+        // Chỉ đổi thứ tự hiển thị, không sửa nội dung
+        await safeDbUpdate(EXAM_QUESTIONS_TABLE, { orderIndex: qIdx, updatedAt: now }, 'id', qId);
+        updatedCount++;
+      }
+    } else {
+      // CÂU HỎI MỚI ĐƯỢC THÊM VÀO ĐỀ THI
+      const newQRow = toDbExamQuestionRow({ ...q, id: qId, examId, orderIndex: qIdx }, examId, qIdx);
+      await safeDbUpsert(EXAM_QUESTIONS_TABLE, [newQRow]);
+
+      if (q.options && Array.isArray(q.options)) {
+        const optRows = q.options.map((opt, optIdx) => {
+          const isCorrect =
+            opt.id === q.correctOptionId ||
+            (Array.isArray(q.correctOptionIds) && q.correctOptionIds.includes(opt.id));
+          return toDbQuestionOptionRow(opt, qId, examId, optIdx, isCorrect);
+        });
+        if (optRows.length > 0) await safeDbUpsert(QUESTION_OPTIONS_TABLE, optRows);
+      }
+
+      if (q.matchingPairs && Array.isArray(q.matchingPairs)) {
+        const matchingRows = q.matchingPairs.map((pair, pairIdx) =>
+          toDbQuestionMatchingPairRow(pair, qId, examId, pairIdx)
+        );
+        if (matchingRows.length > 0) await safeDbUpsert(QUESTION_MATCHING_PAIRS_TABLE, matchingRows);
+      }
+
+      if (q.orderingItems && Array.isArray(q.orderingItems)) {
+        const ordRows = q.orderingItems.map((ord, ordIdx) =>
+          toDbQuestionOrderingItemRow(ord, qId, examId, ordIdx)
+        );
+        if (ordRows.length > 0) await safeDbUpsert(QUESTION_ORDERING_ITEMS_TABLE, ordRows);
+      }
+
+      if (q.tfStatements && Array.isArray(q.tfStatements)) {
+        const tfRows = q.tfStatements.map((tf, tfIdx) =>
+          toDbQuestionTfStatementRow(tf, qId, examId, tfIdx)
+        );
+        if (tfRows.length > 0) await safeDbUpsert(QUESTION_TF_STATEMENTS_TABLE, tfRows);
+      }
+
+      if (q.fillBlankItems && Array.isArray(q.fillBlankItems)) {
+        const fbRows = q.fillBlankItems.map((fb, fbIdx) =>
+          toDbQuestionFillBlankItemRow(fb, qId, examId, fbIdx)
+        );
+        if (fbRows.length > 0) await safeDbUpsert(QUESTION_FILL_BLANK_ITEMS_TABLE, fbRows);
+      }
+
+      if (q.hotspotRegions && Array.isArray(q.hotspotRegions)) {
+        const hsRows = q.hotspotRegions.map((hs, hsIdx) =>
+          toDbQuestionHotspotRow(hs, qId, examId, hsIdx)
+        );
+        if (hsRows.length > 0) await safeDbUpsert(QUESTION_HOTSPOTS_TABLE, hsRows);
+      }
+
+      // Lưu câu mới vào question_bank
+      await saveQuestionsToBank([{ ...q, id: qId }], {
+        sourceExamId: examId,
+        sourceExamTitle: examMeta?.title,
+        subject: examMeta?.subject,
+        grade: examMeta?.grade,
+        creatorId: examMeta?.creatorId,
+        creatorName: examMeta?.creatorName,
+      });
+
+      insertedCount++;
+    }
+  }
+
+  // 3. Xử lý các câu hỏi cũ đã bị XÓA khỏi đề thi (chỉ xóa câu bị loại bỏ)
+  for (const [oldId] of existingMap.entries()) {
+    if (!incomingIds.has(oldId)) {
+      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId = ?`, [oldId]);
+      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE id = ?`, [oldId]);
+      deletedCount++;
+    }
+  }
+
+  console.info(
+    `[Turso Delta Update] Đề thi ${examId}: ${updatedCount} câu hỏi cập nhật (UPDATE), ${unchangedCount} câu hỏi giữ nguyên, ${insertedCount} câu mới, ${deletedCount} câu đã xóa.`
+  );
+
+  return { updatedCount, insertedCount, deletedCount, unchangedCount };
+}
+
 export async function updateExam(id: string, data: Partial<Exam>): Promise<void> {
   const now = new Date().toISOString();
+
+  // Lưu lại danh sách câu hỏi hiện tại trước khi cập nhật bộ nhớ cục bộ
+  const existingExam = localExams.find((e) => e.id === id);
+  const oldQuestions = existingExam?.questions ? [...existingExam.questions] : [];
 
   let processedQuestions = data.questions;
   if (processedQuestions && processedQuestions.length > 0) {
@@ -2303,16 +2784,22 @@ export async function updateExam(id: string, data: Partial<Exam>): Promise<void>
   if (isConfigured) {
     await safeDbUpdate(EXAMS_TABLE, updatedPayload, 'id', id);
     if (processedQuestions && processedQuestions.length > 0) {
-      await saveExamQuestionsToMultiTables(id, processedQuestions);
-      // Đồng thời cập nhật vào question_bank
-      await saveQuestionsToBank(processedQuestions, {
-        sourceExamId: id,
-        sourceExamTitle: updatedPayload.title || data.title,
-        subject: updatedPayload.subject || data.subject,
-        grade: updatedPayload.grade || data.grade,
-        creatorId: updatedPayload.creatorId || data.creatorId,
-        creatorName: updatedPayload.creatorName || data.creatorName,
-      });
+      // Cập nhật vi sai (Delta Update):
+      // Chỉ UPDATE câu hỏi bị sửa đổi bằng ID hiện có (câu lệnh UPDATE),
+      // Tuyệt đối không xóa toàn bộ, không tạo ID mới, không tạo bản ghi trùng lặp,
+      // Giữ nguyên hoàn toàn các câu hỏi không bị sửa đổi.
+      await updateExamQuestionsDelta(
+        id,
+        processedQuestions,
+        {
+          title: updatedPayload.title || data.title,
+          subject: updatedPayload.subject || data.subject,
+          grade: updatedPayload.grade || data.grade,
+          creatorId: updatedPayload.creatorId || data.creatorId,
+          creatorName: updatedPayload.creatorName || data.creatorName,
+        },
+        oldQuestions
+      );
     }
   }
 }
