@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { HotspotRegion, HotspotStudentClick } from '../types/index.ts';
-import { Trash2, MapPin, Check, X, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Trash2, MapPin, Check, X, ZoomIn, Maximize2 } from 'lucide-react';
 
 interface HotspotCanvasProps {
   imageUrl: string;
@@ -15,6 +15,13 @@ interface HotspotCanvasProps {
   reviewClickResults?: { click: HotspotStudentClick; isHit: boolean }[];
 }
 
+interface ImageBounds {
+  offsetX: number;
+  offsetY: number;
+  width: number;
+  height: number;
+}
+
 export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
   imageUrl,
   isEditor = false,
@@ -27,8 +34,13 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
   isReview = false,
   reviewClickResults = [],
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const zoomContainerRef = useRef<HTMLDivElement>(null);
+  // Refs trỏ trực tiếp vào thẻ <img> để đo kích thước thực tế sau khi loại bỏ letterboxing
+  const mainImgRef = useRef<HTMLImageElement>(null);
+  const zoomImgRef = useRef<HTMLImageElement>(null);
+
+  // Kích thước hiển thị thực tế của ảnh (đã trừ khoảng trống object-fit: contain)
+  const [mainBounds, setMainBounds] = useState<ImageBounds | null>(null);
+  const [zoomBounds, setZoomBounds] = useState<ImageBounds | null>(null);
 
   const [drawingStart, setDrawingStart] = useState<{ x: number; y: number } | null>(null);
   const [currentBox, setCurrentBox] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
@@ -37,6 +49,83 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
   const [isZoomOpen, setIsZoomOpen] = useState(false);
   const [zoomHoverCoords, setZoomHoverCoords] = useState<{ x: number; y: number } | null>(null);
   const [isHoveringZoom, setIsHoveringZoom] = useState(false);
+
+  // Hàm tính toán kích thước & vị trí hiển thị thực tế của ảnh bên trong thẻ <img> (Loại bỏ Letterboxing)
+  const calculateImageContentBounds = (img: HTMLImageElement | null): ImageBounds | null => {
+    if (!img) return null;
+    const rect = img.getBoundingClientRect();
+    const naturalWidth = img.naturalWidth;
+    const naturalHeight = img.naturalHeight;
+
+    if (!naturalWidth || !naturalHeight || rect.width <= 0 || rect.height <= 0) {
+      return {
+        offsetX: 0,
+        offsetY: 0,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+
+    const naturalRatio = naturalWidth / naturalHeight;
+    const renderedRatio = rect.width / rect.height;
+
+    let width = rect.width;
+    let height = rect.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    // Trường hợp khung chứa rộng hơn tỷ lệ ảnh -> xuất hiện khoảng trống (letterbox) ở 2 bên trái & phải
+    if (renderedRatio > naturalRatio) {
+      width = rect.height * naturalRatio;
+      offsetX = (rect.width - width) / 2;
+    }
+    // Trường hợp khung chứa cao hơn tỷ lệ ảnh -> xuất hiện khoảng trống (letterbox) ở trên & dưới
+    else if (renderedRatio < naturalRatio) {
+      height = rect.width / naturalRatio;
+      offsetY = (rect.height - height) / 2;
+    }
+
+    return {
+      offsetX: Math.round(offsetX * 10) / 10,
+      offsetY: Math.round(offsetY * 10) / 10,
+      width: Math.round(width * 10) / 10,
+      height: Math.round(height * 10) / 10,
+    };
+  };
+
+  // Cập nhật lại bounds khi resize hoặc ảnh tải xong
+  const updateAllBounds = useCallback(() => {
+    if (mainImgRef.current) {
+      const b = calculateImageContentBounds(mainImgRef.current);
+      if (b && b.width > 0 && b.height > 0) setMainBounds(b);
+    }
+    if (zoomImgRef.current) {
+      const b = calculateImageContentBounds(zoomImgRef.current);
+      if (b && b.width > 0 && b.height > 0) setZoomBounds(b);
+    }
+  }, []);
+
+  useEffect(() => {
+    updateAllBounds();
+    window.addEventListener('resize', updateAllBounds);
+
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        updateAllBounds();
+      });
+      if (mainImgRef.current) ro.observe(mainImgRef.current);
+      if (zoomImgRef.current) ro.observe(zoomImgRef.current);
+    }
+
+    const timer = setTimeout(updateAllBounds, 60);
+
+    return () => {
+      window.removeEventListener('resize', updateAllBounds);
+      if (ro) ro.disconnect();
+      clearTimeout(timer);
+    };
+  }, [imageUrl, isZoomOpen, updateAllBounds]);
 
   // Lắng nghe phím ESC để đóng modal phóng to
   useEffect(() => {
@@ -51,26 +140,31 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isZoomOpen]);
 
-  // Helper chuyển đổi tọa độ chuột thành %
-  const getPercentCoords = (e: React.MouseEvent<HTMLDivElement>, ref: React.RefObject<HTMLDivElement | null>) => {
-    if (!ref.current) return { x: 0, y: 0 };
-    const rect = ref.current.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
-    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  // Tính tọa độ phần trăm (%) dựa trên overlay thực của ảnh (loại bỏ 100% letterboxing)
+  const getPercentCoordsFromEvent = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    const x = Math.max(0, Math.min(100, (clickX / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, (clickY / rect.height) * 100));
+    return {
+      x: Math.round(x * 10) / 10,
+      y: Math.round(y * 10) / 10,
+    };
   };
 
   // ================= XỬ LÝ CHO GIÁO VIÊN VẼ VÙNG ĐÚNG =================
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isEditor) return;
-    const coords = getPercentCoords(e, containerRef);
+    const coords = getPercentCoordsFromEvent(e);
     setDrawingStart(coords);
     setCurrentBox({ x: coords.x, y: coords.y, width: 0, height: 0 });
   };
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isEditor || !drawingStart) return;
-    const coords = getPercentCoords(e, containerRef);
+    const coords = getPercentCoordsFromEvent(e);
     const x = Math.min(drawingStart.x, coords.x);
     const y = Math.min(drawingStart.y, coords.y);
     const width = Math.abs(coords.x - drawingStart.x);
@@ -80,7 +174,6 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
 
   const handleMouseUp = () => {
     if (!isEditor || !drawingStart || !currentBox) return;
-    // Chỉ lưu nếu vùng vẽ đủ lớn (rộng > 2%, cao > 2%)
     if (currentBox.width >= 2 && currentBox.height >= 2) {
       const newRegion: HotspotRegion = {
         id: `zone_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -98,23 +191,10 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
     setCurrentBox(null);
   };
 
-  // ================= XỬ LÝ CHO HỌC SINH CHẤM ĐIỂM (BẢN GỐC) =================
+  // ================= XỬ LÝ CHO HỌC SINH CHẤM ĐIỂM (BẢN GỐC & PHÓNG TO) =================
   const handleStudentClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isStudent || !onStudentClicksChange) return;
-    const coords = getPercentCoords(e, containerRef);
-
-    if (studentClicks.length < maxClicks) {
-      onStudentClicksChange([...studentClicks, coords]);
-    } else {
-      const updated = [...studentClicks.slice(0, maxClicks - 1), coords];
-      onStudentClicksChange(updated);
-    }
-  };
-
-  // ================= XỬ LÝ CHO HỌC SINH CHẤM ĐIỂM (BẢN PHÓNG TO) =================
-  const handleZoomStudentClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isStudent || !onStudentClicksChange) return;
-    const coords = getPercentCoords(e, zoomContainerRef);
+    const coords = getPercentCoordsFromEvent(e);
 
     if (studentClicks.length < maxClicks) {
       onStudentClicksChange([...studentClicks, coords]);
@@ -126,7 +206,7 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
 
   const handleZoomMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isStudent) return;
-    const coords = getPercentCoords(e, zoomContainerRef);
+    const coords = getPercentCoordsFromEvent(e);
     setZoomHoverCoords(coords);
     setIsHoveringZoom(true);
   };
@@ -241,126 +321,152 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
         </div>
       )}
 
-      {/* Vùng Canvas hiển thị ảnh gốc */}
+      {/* ================= VÙNG CANVAS HIỂN THỊ ẢNH GỐC ================= */}
       <div
-        ref={containerRef}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onClick={handleStudentClick}
-        className={`relative w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-slate-300 shadow-inner bg-slate-900/5 ${
-          isEditor ? 'cursor-crosshair' : isStudent ? 'cursor-crosshair' : 'cursor-default'
-        }`}
+        className="relative w-full max-w-2xl mx-auto rounded-xl overflow-hidden border border-slate-300 shadow-inner bg-slate-900/5 flex items-center justify-center"
         style={{ minHeight: '260px' }}
       >
-        <img
-          src={imageUrl}
-          alt="Câu hỏi khảo sát Hotspot"
-          className="w-full h-auto object-contain block pointer-events-none select-none max-h-[480px] mx-auto"
-        />
+        <div className="relative inline-block max-w-full">
+          <img
+            ref={mainImgRef}
+            src={imageUrl}
+            alt="Câu hỏi khảo sát Hotspot"
+            onLoad={updateAllBounds}
+            className="w-full h-auto object-contain block pointer-events-none select-none max-h-[480px] mx-auto"
+          />
 
-        {/* 1. Hiển thị các vùng đúng đã vẽ của Giáo viên */}
-        {(isEditor || isReview) &&
-          regions.map((r, idx) => (
-            <div
-              key={r.id}
-              style={{
-                left: `${r.x}%`,
-                top: `${r.y}%`,
-                width: `${r.width}%`,
-                height: `${r.height}%`,
-              }}
-              className={`absolute border-2 rounded-lg transition-all ${
-                isReview
-                  ? 'border-emerald-500 bg-emerald-500/25 ring-4 ring-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.45)]'
-                  : 'border-blue-500 bg-blue-500/20 hover:bg-blue-500/30'
-              }`}
-            >
-              <div className="absolute top-1 left-1 bg-slate-900/90 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold pointer-events-none shadow-xs border border-white/20">
-                {isReview ? `Vùng đúng #${idx + 1}` : r.label || `#${idx + 1}`}
-              </div>
-
-              {isEditor && (
-                <button
-                  type="button"
-                  onClick={(e) => handleDeleteRegion(r.id, e)}
-                  className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-600 text-white rounded flex items-center justify-center hover:bg-red-700 transition-colors shadow cursor-pointer"
-                  title="Xóa vùng này"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-          ))}
-
-        {/* Vùng đang vẽ dở (GV) */}
-        {isEditor && currentBox && (
+          {/* Lớp overlay tương tác khít 100% với kích thước thực tế của ảnh (loại bỏ letterboxing) */}
           <div
             style={{
-              left: `${currentBox.x}%`,
-              top: `${currentBox.y}%`,
-              width: `${currentBox.width}%`,
-              height: `${currentBox.height}%`,
+              position: 'absolute',
+              left: mainBounds ? `${mainBounds.offsetX}px` : 0,
+              top: mainBounds ? `${mainBounds.offsetY}px` : 0,
+              width: mainBounds ? `${mainBounds.width}px` : '100%',
+              height: mainBounds ? `${mainBounds.height}px` : '100%',
             }}
-            className="absolute border-2 border-dashed border-amber-400 bg-amber-400/25 pointer-events-none"
-          />
-        )}
-
-        {/* 2. Marker điểm chọn của Học sinh trong lúc làm bài (Dấu X màu đỏ nổi bật) */}
-        {isStudent &&
-          studentClicks.map((click, idx) => (
-            <div
-              key={idx}
-              style={{ left: `${click.x}%`, top: `${click.y}%` }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 group z-20"
-            >
-              {/* Marker dấu X màu đỏ */}
-              <div className="relative flex items-center justify-center">
-                <span className="absolute w-8 h-8 rounded-full bg-rose-500/30 animate-ping pointer-events-none" />
-                <div className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg border-2 border-white text-xs font-black ring-2 ring-rose-400 select-none">
-                  <X className="w-4 h-4 stroke-[3]" />
-                </div>
-                <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] font-mono font-semibold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border border-white/10">
-                  #{idx + 1} (X: {click.x}%, Y: {click.y}%)
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={(e) => handleRemoveStudentClick(idx, e)}
-                className="hidden group-hover:flex absolute -top-3 -right-3 w-5 h-5 bg-slate-800 hover:bg-rose-700 text-white rounded-full items-center justify-center shadow text-[10px] cursor-pointer transition-colors"
-                title="Bỏ điểm này"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-
-        {/* 3. Điểm chọn của Học sinh trong chế độ Xem lại đáp án (Review) */}
-        {isReview &&
-          reviewClickResults.map((item, idx) => (
-            <div
-              key={idx}
-              style={{ left: `${item.click.x}%`, top: `${item.click.y}%` }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 z-30"
-            >
-              {item.isHit ? (
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onClick={handleStudentClick}
+            className={`select-none ${
+              isEditor ? 'cursor-crosshair' : isStudent ? 'cursor-crosshair' : 'cursor-default'
+            }`}
+          >
+            {/* 1. Hiển thị các vùng đúng đã vẽ của Giáo viên */}
+            {(isEditor || isReview) &&
+              regions.map((r, idx) => (
                 <div
-                  className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-emerald-400/60 drop-shadow-md scale-110"
-                  title="Điểm bạn chọn: CHÍNH XÁC (Nằm trong vùng đúng)"
+                  key={r.id}
+                  style={{
+                    position: 'absolute',
+                    left: `${r.x}%`,
+                    top: `${r.y}%`,
+                    width: `${r.width}%`,
+                    height: `${r.height}%`,
+                  }}
+                  className={`border-2 rounded-lg transition-all ${
+                    isReview
+                      ? 'border-emerald-500 bg-emerald-500/25 ring-4 ring-emerald-400/50 shadow-[0_0_20px_rgba(16,185,129,0.45)]'
+                      : 'border-blue-500 bg-blue-500/20 hover:bg-blue-500/30'
+                  }`}
                 >
-                  <Check className="w-4 h-4 stroke-[3]" />
+                  <div className="absolute top-1 left-1 bg-slate-900/90 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold pointer-events-none shadow-xs border border-white/20">
+                    {isReview ? `Vùng đúng #${idx + 1}` : r.label || `#${idx + 1}`}
+                  </div>
+
+                  {isEditor && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteRegion(r.id, e)}
+                      className="absolute top-0.5 right-0.5 w-5 h-5 bg-red-600 text-white rounded flex items-center justify-center hover:bg-red-700 transition-colors shadow cursor-pointer"
+                      title="Xóa vùng này"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
-              ) : (
+              ))}
+
+            {/* Vùng đang vẽ dở (GV) */}
+            {isEditor && currentBox && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: `${currentBox.x}%`,
+                  top: `${currentBox.y}%`,
+                  width: `${currentBox.width}%`,
+                  height: `${currentBox.height}%`,
+                }}
+                className="border-2 border-dashed border-amber-400 bg-amber-400/25 pointer-events-none"
+              />
+            )}
+
+            {/* 2. Marker điểm chọn của Học sinh (Dấu X màu đỏ với tâm chuẩn 100% tại điểm click) */}
+            {isStudent &&
+              studentClicks.map((click, idx) => (
                 <div
-                  className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-rose-400/60 animate-pulse drop-shadow-md scale-110"
-                  title="Điểm bạn chọn: SAI (Nằm ngoài vùng đúng)"
+                  key={idx}
+                  style={{
+                    position: 'absolute',
+                    left: `${click.x}%`,
+                    top: `${click.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                  className="group z-30 pointer-events-auto"
                 >
-                  <X className="w-4 h-4 stroke-[3]" />
+                  <div className="relative flex items-center justify-center">
+                    <span className="absolute w-8 h-8 rounded-full bg-rose-500/35 animate-ping pointer-events-none" />
+                    <div className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg border-2 border-white text-xs font-black ring-2 ring-rose-400 select-none cursor-pointer">
+                      <X className="w-4 h-4 stroke-[3]" />
+                    </div>
+                    <div className="absolute top-8 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded shadow pointer-events-none whitespace-nowrap border border-white/20">
+                      #{idx + 1} (X: {click.x}%, Y: {click.y}%)
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => handleRemoveStudentClick(idx, e)}
+                    className="hidden group-hover:flex absolute -top-3.5 -right-3.5 w-5 h-5 bg-slate-800 hover:bg-rose-700 text-white rounded-full items-center justify-center shadow text-[10px] cursor-pointer transition-colors"
+                    title="Bỏ điểm này"
+                  >
+                    ✕
+                  </button>
                 </div>
-              )}
-            </div>
-          ))}
+              ))}
+
+            {/* 3. Điểm chọn của Học sinh trong chế độ Xem lại đáp án (Review) */}
+            {isReview &&
+              reviewClickResults.map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    position: 'absolute',
+                    left: `${item.click.x}%`,
+                    top: `${item.click.y}%`,
+                    transform: 'translate(-50%, -50%)',
+                  }}
+                  className="z-30 pointer-events-auto"
+                >
+                  {item.isHit ? (
+                    <div
+                      className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-emerald-400/60 drop-shadow-md scale-110"
+                      title="Điểm bạn chọn: CHÍNH XÁC (Nằm trong vùng đúng)"
+                    >
+                      <Check className="w-4 h-4 stroke-[3]" />
+                    </div>
+                  ) : (
+                    <div
+                      className="w-7 h-7 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-rose-400/60 animate-pulse drop-shadow-md scale-110"
+                      title="Điểm bạn chọn: SAI (Nằm ngoài vùng đúng)"
+                    >
+                      <X className="w-4 h-4 stroke-[3]" />
+                    </div>
+                  )}
+                </div>
+              ))}
+          </div>
+        </div>
       </div>
 
       {/* ================= MODAL / LIGHTBOX VIEW PHÓNG TO HÌNH ẢNH HOTSPOT ================= */}
@@ -386,7 +492,7 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
                 </h3>
                 <span className="text-[11px] text-slate-400">
                   {isStudent
-                    ? 'Nhấp chuột trực tiếp lên hình ảnh bên dưới để chọn điểm đáp án'
+                    ? 'Nhấp chuột trực tiếp lên hình ảnh để chọn tọa độ đáp án (Đồng bộ tức thời)'
                     : 'Chế độ xem kích thước lớn'}
                 </span>
               </div>
@@ -409,111 +515,136 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
           {/* Vùng Canvas phóng to tương tác */}
           <div className="flex-1 flex items-center justify-center p-2 sm:p-4 overflow-auto min-h-0">
             <div
-              ref={zoomContainerRef}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleZoomStudentClick(e);
-              }}
-              onMouseMove={handleZoomMouseMove}
-              onMouseLeave={handleZoomMouseLeave}
-              className={`relative inline-block max-w-full max-h-[75vh] select-none rounded-2xl overflow-hidden shadow-2xl border border-slate-700/60 bg-slate-900 ${
-                isStudent ? 'cursor-crosshair' : 'cursor-default'
-              }`}
+              onClick={(e) => e.stopPropagation()}
+              className="relative inline-block max-w-full max-h-[75vh] select-none rounded-2xl overflow-hidden shadow-2xl border border-slate-700/60 bg-slate-900"
             >
               <img
+                ref={zoomImgRef}
                 src={imageUrl}
                 alt="Bản đồ Hotspot phóng to"
+                onLoad={updateAllBounds}
                 className="max-h-[72vh] max-w-[88vw] object-contain block pointer-events-none select-none mx-auto"
               />
 
-              {/* Tooltip 'Nhấp để chọn' khi hover di chuyển trên ảnh */}
-              {isStudent && isHoveringZoom && zoomHoverCoords && (
-                <div
-                  style={{ left: `${zoomHoverCoords.x}%`, top: `${zoomHoverCoords.y}%` }}
-                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-9 z-40 bg-slate-900/95 text-white text-[11px] font-bold px-2.5 py-1 rounded-md shadow-xl border border-white/20 whitespace-nowrap flex items-center gap-1.5 backdrop-blur-xs transition-transform"
-                >
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
-                  <span>Nhấp để chọn (X: {zoomHoverCoords.x}%, Y: {zoomHoverCoords.y}%)</span>
-                </div>
-              )}
-
-              {/* 1. Hiển thị các vùng đúng trong bản phóng to (GV hoặc Review) */}
-              {(isEditor || isReview) &&
-                regions.map((r, idx) => (
+              {/* Lớp overlay tương tác khít 100% với kích thước thực tế của ảnh phóng to (Đã loại bỏ khoảng trống Letterboxing) */}
+              <div
+                style={{
+                  position: 'absolute',
+                  left: zoomBounds ? `${zoomBounds.offsetX}px` : 0,
+                  top: zoomBounds ? `${zoomBounds.offsetY}px` : 0,
+                  width: zoomBounds ? `${zoomBounds.width}px` : '100%',
+                  height: zoomBounds ? `${zoomBounds.height}px` : '100%',
+                }}
+                onClick={handleStudentClick}
+                onMouseMove={handleZoomMouseMove}
+                onMouseLeave={handleZoomMouseLeave}
+                className={`select-none ${isStudent ? 'cursor-crosshair' : 'cursor-default'}`}
+              >
+                {/* Tooltip 'Nhấp để chọn' khi hover di chuyển trên ảnh */}
+                {isStudent && isHoveringZoom && zoomHoverCoords && (
                   <div
-                    key={r.id}
                     style={{
-                      left: `${r.x}%`,
-                      top: `${r.y}%`,
-                      width: `${r.width}%`,
-                      height: `${r.height}%`,
+                      position: 'absolute',
+                      left: `${zoomHoverCoords.x}%`,
+                      top: `${zoomHoverCoords.y}%`,
+                      transform: 'translate(-50%, -120%)',
                     }}
-                    className={`absolute border-2 rounded-lg transition-all ${
-                      isReview
-                        ? 'border-emerald-500 bg-emerald-500/30 ring-4 ring-emerald-400/50 shadow-[0_0_25px_rgba(16,185,129,0.55)]'
-                        : 'border-blue-500 bg-blue-500/25'
-                    }`}
+                    className="pointer-events-none z-40 bg-slate-900/95 text-white text-[11px] font-bold px-2.5 py-1 rounded-md shadow-xl border border-white/20 whitespace-nowrap flex items-center gap-1.5 backdrop-blur-xs transition-transform"
                   >
-                    <div className="absolute top-1 left-1 bg-slate-900/90 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold pointer-events-none shadow-xs border border-white/20">
-                      {isReview ? `Vùng đúng #${idx + 1}` : r.label || `#${idx + 1}`}
-                    </div>
+                    <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                    <span>Nhấp để chọn (X: {zoomHoverCoords.x}%, Y: {zoomHoverCoords.y}%)</span>
                   </div>
-                ))}
+                )}
 
-              {/* 2. Hiển thị Marker dấu X màu đỏ tại các điểm đã chọn (Đồng bộ tức thời) */}
-              {isStudent &&
-                studentClicks.map((click, idx) => (
-                  <div
-                    key={idx}
-                    style={{ left: `${click.x}%`, top: `${click.y}%` }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 group z-30"
-                  >
-                    <div className="relative flex items-center justify-center">
-                      <span className="absolute w-9 h-9 rounded-full bg-rose-500/40 animate-ping pointer-events-none" />
-                      <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-2xl border-2 border-white text-xs font-black ring-2 ring-rose-400 select-none">
-                        <X className="w-5 h-5 stroke-[3]" />
-                      </div>
-                      <div className="absolute top-9 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shadow-lg pointer-events-none whitespace-nowrap border border-white/20">
-                        #{idx + 1} (X: {click.x}%, Y: {click.y}%)
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => handleRemoveStudentClick(idx, e)}
-                      className="hidden group-hover:flex absolute -top-3.5 -right-3.5 w-6 h-6 bg-slate-800 hover:bg-rose-700 text-white rounded-full items-center justify-center shadow-lg text-xs cursor-pointer transition-colors"
-                      title="Bỏ điểm này"
+                {/* 1. Hiển thị các vùng đúng trong bản phóng to (GV hoặc Review) */}
+                {(isEditor || isReview) &&
+                  regions.map((r, idx) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        position: 'absolute',
+                        left: `${r.x}%`,
+                        top: `${r.y}%`,
+                        width: `${r.width}%`,
+                        height: `${r.height}%`,
+                      }}
+                      className={`border-2 rounded-lg transition-all ${
+                        isReview
+                          ? 'border-emerald-500 bg-emerald-500/30 ring-4 ring-emerald-400/50 shadow-[0_0_25px_rgba(16,185,129,0.55)]'
+                          : 'border-blue-500 bg-blue-500/25'
+                      }`}
                     >
-                      ✕
-                    </button>
-                  </div>
-                ))}
+                      <div className="absolute top-1 left-1 bg-slate-900/90 text-white text-[10px] px-2 py-0.5 rounded font-mono font-bold pointer-events-none shadow-xs border border-white/20">
+                        {isReview ? `Vùng đúng #${idx + 1}` : r.label || `#${idx + 1}`}
+                      </div>
+                    </div>
+                  ))}
 
-              {/* 3. Review Click Markers */}
-              {isReview &&
-                reviewClickResults.map((item, idx) => (
-                  <div
-                    key={idx}
-                    style={{ left: `${item.click.x}%`, top: `${item.click.y}%` }}
-                    className="absolute -translate-x-1/2 -translate-y-1/2 z-30"
-                  >
-                    {item.isHit ? (
-                      <div
-                        className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-emerald-400/60 drop-shadow-md scale-110"
-                        title="Điểm bạn chọn: CHÍNH XÁC (Nằm trong vùng đúng)"
-                      >
-                        <Check className="w-5 h-5 stroke-[3]" />
+                {/* 2. Hiển thị Marker dấu X màu đỏ tại các điểm đã chọn (Tâm chuẩn 100% tại điểm click) */}
+                {isStudent &&
+                  studentClicks.map((click, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'absolute',
+                        left: `${click.x}%`,
+                        top: `${click.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      className="group z-30 pointer-events-auto"
+                    >
+                      <div className="relative flex items-center justify-center">
+                        <span className="absolute w-9 h-9 rounded-full bg-rose-500/40 animate-ping pointer-events-none" />
+                        <div className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-2xl border-2 border-white text-xs font-black ring-2 ring-rose-400 select-none cursor-pointer">
+                          <X className="w-5 h-5 stroke-[3]" />
+                        </div>
+                        <div className="absolute top-9 left-1/2 -translate-x-1/2 bg-slate-900/90 text-white text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shadow-lg pointer-events-none whitespace-nowrap border border-white/20">
+                          #{idx + 1} (X: {click.x}%, Y: {click.y}%)
+                        </div>
                       </div>
-                    ) : (
-                      <div
-                        className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-rose-400/60 animate-pulse drop-shadow-md scale-110"
-                        title="Điểm bạn chọn: SAI (Nằm ngoài vùng đúng)"
+
+                      <button
+                        type="button"
+                        onClick={(e) => handleRemoveStudentClick(idx, e)}
+                        className="hidden group-hover:flex absolute -top-3.5 -right-3.5 w-6 h-6 bg-slate-800 hover:bg-rose-700 text-white rounded-full items-center justify-center shadow-lg text-xs cursor-pointer transition-colors"
+                        title="Bỏ điểm này"
                       >
-                        <X className="w-5 h-5 stroke-[3]" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+
+                {/* 3. Review Click Markers */}
+                {isReview &&
+                  reviewClickResults.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'absolute',
+                        left: `${item.click.x}%`,
+                        top: `${item.click.y}%`,
+                        transform: 'translate(-50%, -50%)',
+                      }}
+                      className="z-30 pointer-events-auto"
+                    >
+                      {item.isHit ? (
+                        <div
+                          className="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-emerald-400/60 drop-shadow-md scale-110"
+                          title="Điểm bạn chọn: CHÍNH XÁC (Nằm trong vùng đúng)"
+                        >
+                          <Check className="w-5 h-5 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div
+                          className="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xl border-2 border-white ring-4 ring-rose-400/60 animate-pulse drop-shadow-md scale-110"
+                          title="Điểm bạn chọn: SAI (Nằm ngoài vùng đúng)"
+                        >
+                          <X className="w-5 h-5 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
 
@@ -581,4 +712,3 @@ export const HotspotCanvas: React.FC<HotspotCanvasProps> = ({
     </div>
   );
 };
-
