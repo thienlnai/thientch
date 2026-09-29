@@ -476,17 +476,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     });
   };
 
-  // Đồng bộ ngầm (Auto-save) sau mỗi 30 giây gom toàn bộ câu trả lời và thời gian
+  // Theo dõi hash câu trả lời đã đồng bộ gần nhất để chống spam request ngầm (Dirty Check)
+  const lastSyncedAnswersHashRef = useRef<string>(JSON.stringify(initialDraft?.answers || {}));
+
+  // Đồng bộ ngầm (Auto-save) sau mỗi 60 giây - CHỈ gửi server nếu có câu trả lời mới (Dirty check)
+  // Tuyệt đối không gửi request định kỳ nếu học sinh không thay đổi câu trả lời hoặc chỉ để đồng bộ giờ!
   useEffect(() => {
     if (isTeacherTesting || isFinishedRef.current) return;
 
     const autoSaveInterval = setInterval(async () => {
+      // 1. Luôn lưu ngay tức khắc vào localStorage an toàn trên máy học sinh (0 network request)
+      saveDraftToLocalStorage(answersRef.current);
+
+      const currentAnswersHash = JSON.stringify(answersRef.current);
+      // Nếu câu trả lời chưa từng thay đổi so với lần đồng bộ trước, bỏ qua không gọi server
+      if (currentAnswersHash === lastSyncedAnswersHashRef.current) {
+        return;
+      }
+
       try {
         setSaveStatus('saving');
-        // 1. Lưu ngay tức khắc vào localStorage để không bị phụ thuộc vào mạng
-        saveDraftToLocalStorage(answersRef.current);
-
-        // 2. Gửi ngầm bản nháp lên server qua autoSaveExamDraft (non-blocking)
         const isStudentUser = 'studentCode' in currentUser;
         const studentCode = isStudentUser ? (currentUser as Student).studentCode : 'GV-TEST';
         const classId = isStudentUser ? (currentUser as Student).classId : exam.classIds[0] || 'CLASS_TEST';
@@ -501,13 +510,14 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           timeRemaining: timeRemainingRef.current,
         });
 
+        lastSyncedAnswersHashRef.current = currentAnswersHash;
         setSaveStatus('saved');
         setLastAutoSaveTime(new Date().toLocaleTimeString('vi-VN'));
       } catch (err) {
-        console.warn('[Auto-save 30s] Đồng bộ ngầm tạm thời không kết nối (bản nháp đã lưu an toàn trên máy):', err);
+        console.warn('[Auto-save] Đồng bộ ngầm tạm thời offline (bản nháp đã lưu an toàn trên máy):', err);
         setSaveStatus('saved');
       }
-    }, 30000); // 30 giây
+    }, 60000); // 60 giây và chỉ gửi khi answers bị thay đổi (Dirty check)
 
     return () => clearInterval(autoSaveInterval);
   }, [exam.id, currentUser.id, isTeacherTesting]);

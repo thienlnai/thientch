@@ -71,14 +71,15 @@ export default function App() {
     };
   }, []);
 
-  // Check and seed initial data once users and schools listeners return
+  // Check and seed initial data once only if database is completely empty
   useEffect(() => {
-    const timer = setTimeout(() => {
-      seedInitialDataIfNeeded(users, schools);
-    }, 400);
-
-    return () => clearTimeout(timer);
-  }, [users.length, schools.length]);
+    if (users.length === 0 && schools.length === 0) {
+      const timer = setTimeout(() => {
+        seedInitialDataIfNeeded(users, schools);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [users.length === 0, schools.length === 0]);
 
   // Handle Login
   const handleLoginSuccess = (

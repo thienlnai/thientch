@@ -31,7 +31,7 @@ import {
   FileCheck2,
   FileQuestion
 } from 'lucide-react';
-import { addExamSubmission } from '../services/dbService.ts';
+import { addExamSubmission, getExamWithQuestions } from '../services/dbService.ts';
 import { 
   isExamVisibleToGrade, 
   getClassGradeNumber, 
@@ -72,12 +72,36 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   
   // State thi & xem lại bài thi
   const [takingExam, setTakingExam] = useState<Exam | null>(null);
+  const [loadingExamId, setLoadingExamId] = useState<string | null>(null);
   const [reviewingSubmission, setReviewingSubmission] = useState<ExamSubmission | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  // Khởi động làm bài thi: tải toàn bộ câu hỏi qua getExamWithQuestions (Single Query JOIN + Cache)
+  const handleStartExam = async (ex: Exam) => {
+    if (ex.questions && ex.questions.length > 0) {
+      setTakingExam(ex);
+      return;
+    }
+
+    setLoadingExamId(ex.id);
+    try {
+      const fullExam = await getExamWithQuestions(ex.id);
+      if (fullExam && fullExam.questions && fullExam.questions.length > 0) {
+        setTakingExam(fullExam);
+      } else {
+        setTakingExam(ex);
+      }
+    } catch (err) {
+      console.error('Lỗi nạp đề thi:', err);
+      setTakingExam(ex);
+    } finally {
+      setLoadingExamId(null);
+    }
   };
 
   // ================= 1. CHỈ THẤY ĐƯỢC ĐỀ THI DO GIÁO VIÊN ĐƯỢC PHÂN CÔNG TẠO RA (Requirement B.1) =================
@@ -457,11 +481,25 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                         {/* Nút Bắt đầu làm bài / Làm lại (Xáo trộn câu hỏi & đáp án) */}
                         <button
                           type="button"
-                          onClick={() => setTakingExam(ex)}
-                          className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                          disabled={loadingExamId === ex.id}
+                          onClick={() => handleStartExam(ex)}
+                          className={`flex-1 py-2 px-3 rounded-xl text-white font-bold text-xs shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
+                            loadingExamId === ex.id
+                              ? 'bg-emerald-400 cursor-wait'
+                              : 'bg-emerald-600 hover:bg-emerald-700'
+                          }`}
                         >
-                          <PlayCircle className="w-4 h-4" />
-                          <span>{isAttempted ? 'Làm Lại Đề Này' : 'Bắt Đầu Làm Bài'}</span>
+                          {loadingExamId === ex.id ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Đang tải đề thi...</span>
+                            </>
+                          ) : (
+                            <>
+                              <PlayCircle className="w-4 h-4" />
+                              <span>{isAttempted ? 'Làm Lại Đề Này' : 'Bắt Đầu Làm Bài'}</span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </div>

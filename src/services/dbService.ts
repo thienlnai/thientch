@@ -1509,10 +1509,8 @@ export function subscribeSchools(onUpdate: (schools: School[]) => void) {
     };
 
     fetchSchools();
-    const timer = setInterval(fetchSchools, 6000);
     return () => {
       schoolListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1539,10 +1537,8 @@ export function subscribeClasses(onUpdate: (classes: SchoolClass[]) => void) {
     };
 
     fetchClasses();
-    const timer = setInterval(fetchClasses, 6000);
     return () => {
       classListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1569,10 +1565,8 @@ export function subscribeStudents(onUpdate: (students: Student[]) => void) {
     };
 
     fetchStudents();
-    const timer = setInterval(fetchStudents, 6000);
     return () => {
       studentListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1605,10 +1599,8 @@ export function subscribeUsers(onUpdate: (users: UserAccount[]) => void) {
     };
 
     fetchUsers();
-    const timer = setInterval(fetchUsers, 6000);
     return () => {
       userListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1617,6 +1609,265 @@ export function subscribeUsers(onUpdate: (users: UserAccount[]) => void) {
   };
 }
 
+// ================= CACHING DỮ LIỆU ĐỀ THI & CÂU HỎI (Requirement 4) =================
+interface CachedExamEntry {
+  exam: Exam;
+  timestamp: number;
+}
+const examMemoryCache = new Map<string, CachedExamEntry>();
+const EXAM_CACHE_TTL_MS = 15 * 60 * 1000; // 15 phút (900,000 ms)
+
+/**
+ * Xóa cache đề thi khi giáo viên sửa hoặc xóa đề
+ */
+export function invalidateExamCache(examId?: string) {
+  if (examId) {
+    examMemoryCache.delete(examId);
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.removeItem(`thientch_exam_cache_${examId}`);
+      }
+      // Gửi tín hiệu xóa cache phía server qua /api/exam
+      if (typeof window !== 'undefined' && window.location?.origin) {
+        fetch('/api/exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'invalidate', examId }),
+        }).catch(() => {});
+      }
+    } catch {}
+  } else {
+    examMemoryCache.clear();
+    try {
+      if (typeof localStorage !== 'undefined') {
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('thientch_exam_cache_')) {
+            localStorage.removeItem(key);
+          }
+        });
+      }
+    } catch {}
+  }
+}
+
+/**
+ * KHẮC PHỤC TRIỆT ĐỂ N+1 QUERY & ROWS READ BÙNG NỔ (Requirement 2 & 4):
+ * - Tầng 1: In-Memory Cache (RAM) phản hồi trong 0ms, 0 network request.
+ * - Tầng 2: LocalStorage Cache phản hồi trong 1ms, 0 network request.
+ * - Tầng 3: API Route /api/exam?id=... (Được cache tại Server với TTL 15 phút, 0 Rows Read Turso).
+ * - Tầng 4: Single Query LEFT JOIN giữa bảng exams và exam_questions theo examId (1 lượt quét duy nhất có Index).
+ * Tuyệt đối không lặp for để truy vấn từng câu hỏi hay từng lựa chọn!
+ */
+export async function getExamWithQuestions(examId: string, forceRefresh = false): Promise<Exam | null> {
+  const cleanId = String(examId || '').trim();
+  if (!cleanId) return null;
+
+  const now = Date.now();
+
+  // TẦNG 1: IN-MEMORY CACHE (0 LƯỢT ĐỌC TURSO)
+  const cached = examMemoryCache.get(cleanId);
+  if (!forceRefresh && cached && now - cached.timestamp < EXAM_CACHE_TTL_MS) {
+    return cached.exam;
+  }
+
+  // TẦNG 2: LOCALSTORAGE CACHE (0 LƯỢT ĐỌC TURSO)
+  if (!forceRefresh && typeof localStorage !== 'undefined') {
+    try {
+      const stored = localStorage.getItem(`thientch_exam_cache_${cleanId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.exam && parsed.timestamp && now - parsed.timestamp < EXAM_CACHE_TTL_MS) {
+          examMemoryCache.set(cleanId, { exam: parsed.exam, timestamp: parsed.timestamp });
+          return parsed.exam;
+        }
+      }
+    } catch {}
+  }
+
+  // Kiểm tra trong bộ nhớ localExams nếu đã có câu hỏi
+  const localMatch = localExams.find((e) => e.id === cleanId);
+  if (!forceRefresh && localMatch && localMatch.questions && localMatch.questions.length > 0) {
+    examMemoryCache.set(cleanId, { exam: localMatch, timestamp: now });
+    return localMatch;
+  }
+
+  // TẦNG 3: THỬ GỌI API SERVER /api/exam?id=... (SERVER-SIDE CACHE)
+  if (!forceRefresh && typeof window !== 'undefined' && window.location?.origin) {
+    try {
+      const res = await fetch(`/api/exam?id=${encodeURIComponent(cleanId)}`, {
+        signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' 
+          ? AbortSignal.timeout(6000) 
+          : undefined,
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && json.data) {
+          const apiExam = json.data as Exam;
+          examMemoryCache.set(cleanId, { exam: apiExam, timestamp: now });
+          try {
+            localStorage.setItem(
+              `thientch_exam_cache_${cleanId}`,
+              JSON.stringify({ exam: apiExam, timestamp: now })
+            );
+          } catch {}
+          // Đồng bộ vào localExams
+          const idx = localExams.findIndex((e) => e.id === cleanId);
+          if (idx >= 0) {
+            localExams[idx] = apiExam;
+          } else {
+            localExams.push(apiExam);
+          }
+          notifyExams();
+          return apiExam;
+        }
+      }
+    } catch {
+      // Fallback sang truy vấn Turso trực tiếp
+    }
+  }
+
+  if (!isConfigured) {
+    return localMatch || null;
+  }
+
+  try {
+    /**
+     * TẦNG 4: SINGLE QUERY LEFT JOIN DUY NHẤT (CHỐNG N+1 & FULL TABLE SCAN)
+     * - Chỉ 1 round-trip tới Turso Database.
+     * - Dùng Primary Key exams.id và B-Tree Index idx_exam_questions_exam_order.
+     * - Số Rows Read chính xác bằng số câu hỏi của đề thi, không đọc dư 1 hàng nào!
+     */
+    const joinSql = `
+      SELECT 
+        e.id AS e_id, e.title AS e_title, e.description AS e_description, 
+        e.subject AS e_subject, e.grade AS e_grade, e.targetGrades AS e_targetGrades, 
+        e.creatorId AS e_creatorId, e.creatorName AS e_creatorName, e.classIds AS e_classIds, 
+        e.durationMinutes AS e_durationMinutes, e.totalScore AS e_totalScore, 
+        e.passingScore AS e_passingScore, e.status AS e_status, 
+        e.allowReviewAnswers AS e_allowReviewAnswers, e.isPracticeTest AS e_isPracticeTest, 
+        e.practiceRandomCount AS e_practiceRandomCount, e.totalQuestions AS e_totalQuestions,
+        e.createdAt AS e_createdAt, e.updatedAt AS e_updatedAt,
+        q.id AS q_id, q.examId AS q_examId, q.orderIndex AS q_orderIndex, q.type AS q_type, 
+        q.title AS q_title, q.mediaType AS q_mediaType, q.mediaUrl AS q_mediaUrl, 
+        q.explanation AS q_explanation, q.correctOptionId AS q_correctOptionId, 
+        q.correctOptionIds AS q_correctOptionIds, q.trueLabel AS q_trueLabel, 
+        q.falseLabel AS q_falseLabel, q.hotspotImageUrl AS q_hotspotImageUrl, 
+        q.fillBlankTemplate AS q_fillBlankTemplate, q.options AS q_options, 
+        q.matchingPairs AS q_matchingPairs, q.shuffledRightPairs AS q_shuffledRightPairs, 
+        q.orderingItems AS q_orderingItems, q.tfStatements AS q_tfStatements, 
+        q.shuffledTfColumns AS q_shuffledTfColumns, q.hotspotRegions AS q_hotspotRegions, 
+        q.fillBlankItems AS q_fillBlankItems, q.createdAt AS q_createdAt, q.updatedAt AS q_updatedAt
+      FROM ${EXAMS_TABLE} e
+      LEFT JOIN ${EXAM_QUESTIONS_TABLE} q ON e.id = q.examId
+      WHERE e.id = ?
+      ORDER BY q.orderIndex ASC
+    `;
+
+    const rows = await tursoQuery(joinSql, [cleanId]);
+
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return localMatch || null;
+    }
+
+    const first = rows[0];
+    const parseJson = (val: any, fallback: any = []) => {
+      if (!val) return fallback;
+      if (typeof val === 'string') {
+        try { return JSON.parse(val); } catch { return fallback; }
+      }
+      return val;
+    };
+
+    const baseExam: Exam = {
+      id: String(first.e_id || cleanId),
+      title: String(first.e_title || 'Đề thi trắc nghiệm'),
+      description: String(first.e_description || ''),
+      subject: String(first.e_subject || 'Công nghệ Thông tin'),
+      grade: String(first.e_grade || 'Khối 12'),
+      targetGrades: parseJson(first.e_targetGrades, []),
+      creatorId: String(first.e_creatorId || ''),
+      creatorName: String(first.e_creatorName || ''),
+      classIds: parseJson(first.e_classIds, []),
+      durationMinutes: Number(first.e_durationMinutes ?? 45),
+      totalScore: Number(first.e_totalScore ?? 1000),
+      passingScore: Number(first.e_passingScore ?? 950),
+      status: first.e_status || 'published',
+      allowReviewAnswers: Boolean(first.e_allowReviewAnswers ?? 1),
+      isPracticeTest: Boolean(first.e_isPracticeTest ?? 0),
+      practiceRandomCount: Number(first.e_practiceRandomCount ?? 0),
+      totalQuestions: Number(first.e_totalQuestions ?? 0),
+      questionIds: [],
+      questions: [],
+      createdAt: first.e_createdAt || new Date().toISOString(),
+      updatedAt: first.e_updatedAt || new Date().toISOString(),
+    };
+
+    const questions: ExamQuestion[] = [];
+    const seenQIds = new Set<string>();
+
+    for (const r of rows) {
+      const qId = r.q_id;
+      if (qId && !seenQIds.has(qId)) {
+        seenQIds.add(qId);
+        questions.push({
+          id: String(qId),
+          type: r.q_type || 'single_choice',
+          title: String(r.q_title || ''),
+          mediaType: r.q_mediaType || 'none',
+          mediaUrl: r.q_mediaUrl || undefined,
+          explanation: r.q_explanation || undefined,
+          options: parseJson(r.q_options, []),
+          correctOptionId: r.q_correctOptionId || undefined,
+          correctOptionIds: parseJson(r.q_correctOptionIds, []),
+          matchingPairs: parseJson(r.q_matchingPairs, []),
+          shuffledRightPairs: parseJson(r.q_shuffledRightPairs, []),
+          orderingItems: parseJson(r.q_orderingItems, []),
+          trueLabel: r.q_trueLabel || 'Đúng',
+          falseLabel: r.q_falseLabel || 'Sai',
+          tfStatements: parseJson(r.q_tfStatements, []),
+          shuffledTfColumns: parseJson(r.q_shuffledTfColumns, []),
+          hotspotImageUrl: r.q_hotspotImageUrl || undefined,
+          hotspotRegions: parseJson(r.q_hotspotRegions, []),
+          fillBlankTemplate: r.q_fillBlankTemplate || undefined,
+          fillBlankItems: parseJson(r.q_fillBlankItems, []),
+          createdAt: r.q_createdAt || baseExam.createdAt,
+          updatedAt: r.q_updatedAt || baseExam.updatedAt,
+        });
+      }
+    }
+
+    baseExam.questions = questions;
+    baseExam.totalQuestions = questions.length || baseExam.totalQuestions;
+    baseExam.questionIds = questions.map((q) => q.id);
+
+    // Lưu vào In-Memory Cache (RAM) và LocalStorage (TTL 15 phút)
+    examMemoryCache.set(cleanId, { exam: baseExam, timestamp: now });
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(
+          `thientch_exam_cache_${cleanId}`,
+          JSON.stringify({ exam: baseExam, timestamp: now })
+        );
+      }
+    } catch {}
+
+    // Đồng bộ vào localExams
+    const idx = localExams.findIndex((e) => e.id === cleanId);
+    if (idx >= 0) {
+      localExams[idx] = baseExam;
+    } else {
+      localExams.push(baseExam);
+    }
+    notifyExams();
+
+    return baseExam;
+  } catch (err) {
+    console.error(`Lỗi khi nạp chi tiết đề thi ${cleanId}:`, err);
+    return localMatch || null;
+  }
+}
+
+
 export function subscribeExams(onUpdate: (exams: Exam[]) => void) {
   examListeners.add(onUpdate);
   onUpdate([...localExams]);
@@ -1624,27 +1875,15 @@ export function subscribeExams(onUpdate: (exams: Exam[]) => void) {
   if (isConfigured) {
     const fetchExams = async () => {
       try {
-        const [
-          examsRows,
-          questionsRows,
-          optionsRows,
-          matchingRows,
-          orderingRows,
-          tfRows,
-          fillBlankRows,
-          hotspotRows,
-          bankRows,
-        ] = await Promise.all([
-          tursoQuery(`SELECT * FROM ${EXAMS_TABLE} ORDER BY createdAt DESC`),
-          tursoQuery(`SELECT * FROM ${EXAM_QUESTIONS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_OPTIONS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_MATCHING_PAIRS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_ORDERING_ITEMS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_TF_STATEMENTS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_FILL_BLANK_ITEMS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_HOTSPOTS_TABLE} ORDER BY orderIndex ASC`).catch(() => []),
-          tursoQuery(`SELECT * FROM ${QUESTION_BANK_TABLE} ORDER BY createdAt DESC`).catch(() => []),
-        ]);
+        const examsRows = await tursoQuery(`SELECT * FROM ${EXAMS_TABLE} ORDER BY createdAt DESC`);
+        const questionsRows: any[] = [];
+        const optionsRows: any[] = [];
+        const matchingRows: any[] = [];
+        const orderingRows: any[] = [];
+        const tfRows: any[] = [];
+        const fillBlankRows: any[] = [];
+        const hotspotRows: any[] = [];
+        const bankRows: any[] = [];
 
         if (Array.isArray(examsRows)) {
           const allQuestionsPool = new Map<string, ExamQuestion>();
@@ -1874,10 +2113,8 @@ export function subscribeExams(onUpdate: (exams: Exam[]) => void) {
     };
 
     fetchExams();
-    const timer = setInterval(fetchExams, 6000);
     return () => {
       examListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1893,7 +2130,11 @@ export function subscribeSubmissions(onUpdate: (submissions: ExamSubmission[]) =
   if (isConfigured) {
     const fetchSubmissions = async () => {
       try {
-        const rows = await tursoQuery(`SELECT * FROM ${SUBMISSIONS_TABLE} ORDER BY submittedAt DESC`);
+        // LỌC BỎ BẢN NHÁP DRAFT VÀ GIỚI HẠN 200 BẢN GHI MỚI NHẤT
+        // NGĂN CHẶN BÙNG NỔ ROWS READ
+        const rows = await tursoQuery(
+          `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC LIMIT 200`
+        );
         if (Array.isArray(rows)) {
           localSubmissions = sortBySubmittedAt(rows.map(normalizeSubmission));
           notifySubmissions();
@@ -1904,10 +2145,8 @@ export function subscribeSubmissions(onUpdate: (submissions: ExamSubmission[]) =
     };
 
     fetchSubmissions();
-    const timer = setInterval(fetchSubmissions, 6000);
     return () => {
       submissionListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -1923,7 +2162,7 @@ export function subscribeQuestionBank(onUpdate: (questions: ExamQuestion[]) => v
   if (isConfigured) {
     const fetchBank = async () => {
       try {
-        const rows = await tursoQuery(`SELECT * FROM ${QUESTION_BANK_TABLE} ORDER BY updatedAt DESC`);
+        const rows = await tursoQuery(`SELECT * FROM ${QUESTION_BANK_TABLE} ORDER BY updatedAt DESC LIMIT 200`);
         if (Array.isArray(rows)) {
           const remoteBank = rows.map(normalizeQuestionBankRow);
           const bankMap = new Map<string, ExamQuestion>();
@@ -1941,10 +2180,8 @@ export function subscribeQuestionBank(onUpdate: (questions: ExamQuestion[]) => v
     };
 
     fetchBank();
-    const timer = setInterval(fetchBank, 8000);
     return () => {
       questionBankListeners.delete(onUpdate);
-      clearInterval(timer);
     };
   }
 
@@ -2729,19 +2966,24 @@ export async function updateExamQuestionsDelta(
     }
   }
 
-  // 3. Xử lý các câu hỏi cũ đã bị XÓA khỏi đề thi (chỉ xóa câu bị loại bỏ)
-  for (const [oldId] of existingMap.entries()) {
-    if (!incomingIds.has(oldId)) {
-      await tursoExecute(`DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId = ?`, [oldId]);
-      await tursoExecute(`DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE id = ?`, [oldId]);
-      deletedCount++;
-    }
+  // 3. Xử lý các câu hỏi cũ đã bị XÓA khỏi đề thi (gom thành 1 batch duy nhất, KHÔNG lặp query)
+  const deletedIds = Array.from(existingMap.keys()).filter((oldId) => !incomingIds.has(oldId));
+  if (deletedIds.length > 0) {
+    const placeholders = deletedIds.map(() => '?').join(', ');
+    await tursoBatch([
+      { sql: `DELETE FROM "${QUESTION_OPTIONS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${QUESTION_MATCHING_PAIRS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${QUESTION_ORDERING_ITEMS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${QUESTION_TF_STATEMENTS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${QUESTION_FILL_BLANK_ITEMS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${QUESTION_HOTSPOTS_TABLE}" WHERE questionId IN (${placeholders})`, args: deletedIds },
+      { sql: `DELETE FROM "${EXAM_QUESTIONS_TABLE}" WHERE id IN (${placeholders})`, args: deletedIds },
+    ]);
+    deletedCount = deletedIds.length;
   }
+
+  // Xóa cache đề thi sau khi cập nhật vi sai thành công
+  invalidateExamCache(examId);
 
   console.info(
     `[Turso Delta Update] Đề thi ${examId}: ${updatedCount} câu hỏi cập nhật (UPDATE), ${unchangedCount} câu hỏi giữ nguyên, ${insertedCount} câu mới, ${deletedCount} câu đã xóa.`
@@ -2752,6 +2994,9 @@ export async function updateExamQuestionsDelta(
 
 export async function updateExam(id: string, data: Partial<Exam>): Promise<void> {
   const now = new Date().toISOString();
+
+  // Xóa cache đề thi ngay lập tức
+  invalidateExamCache(id);
 
   // Lưu lại danh sách câu hỏi hiện tại trước khi cập nhật bộ nhớ cục bộ
   const existingExam = localExams.find((e) => e.id === id);
@@ -2805,6 +3050,7 @@ export async function updateExam(id: string, data: Partial<Exam>): Promise<void>
 }
 
 export async function deleteExam(id: string): Promise<void> {
+  invalidateExamCache(id);
   localExams = localExams.filter((e) => e.id !== id);
   notifyExams();
 
@@ -2821,6 +3067,7 @@ export async function deleteExam(id: string): Promise<void> {
 
 export async function deleteMultipleExams(ids: string[]): Promise<number> {
   if (ids.length === 0) return 0;
+  ids.forEach((id) => invalidateExamCache(id));
   const idSet = new Set(ids);
   localExams = localExams.filter((e) => !idSet.has(e.id));
   notifyExams();
@@ -3336,16 +3583,19 @@ export async function migrateAllExistingImagesToStorage(
 }
 
 // ================= SEED INITIAL DATA =================
+let hasSeededInitialData = false;
 
 export async function seedInitialDataIfNeeded(existingUsers: UserAccount[], existingSchools: School[]) {
-  const now = new Date().toISOString();
-
-  // Tự động khởi tạo schema SQLite trên Turso nếu đang online
-  if (isConfigured) {
-    try {
-      await initTursoSchema();
-    } catch {}
+  if (hasSeededInitialData) return;
+  
+  // Chỉ kiểm tra khi danh sách người dùng hoặc trường học chưa có trong phiên
+  if (existingUsers.length > 0 && existingSchools.length > 0) {
+    hasSeededInitialData = true;
+    return;
   }
+  
+  hasSeededInitialData = true;
+  const now = new Date().toISOString();
 
   // 1. Ensure initial admin & teacher exist
   const currentUsers = existingUsers.length > 0 ? existingUsers : localUsers;
