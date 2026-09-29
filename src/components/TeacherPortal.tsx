@@ -68,6 +68,7 @@ import {
   deleteExamSubmission,
   deleteMultipleExamSubmissions,
   deleteStudentSubmissions,
+  refreshSubmissionsNow,
   onMissingQuestionsColumn,
   syncAllExamQuestionsToSupabase,
   splitAndMigrateExamQuestionsToSeparateTable
@@ -233,6 +234,19 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [examClassFilter, setExamClassFilter] = useState<string>('all');
   const [examGradeFilter, setExamGradeFilter] = useState<string>('all');
   const [isQuestionBankModalOpen, setIsQuestionBankModalOpen] = useState(false);
+  const [isRefreshingSubs, setIsRefreshingSubs] = useState(false);
+  const [lastSubRefreshTime, setLastSubRefreshTime] = useState<string>('Vừa xong');
+
+  // Tự động làm mới và đồng bộ danh sách bài nộp khi giáo viên mở tab Khảo thí & Chấm thi
+  useEffect(() => {
+    if (activeTab === 'grading') {
+      refreshSubmissionsNow()
+        .then(() => {
+          setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+        })
+        .catch(() => {});
+    }
+  }, [activeTab]);
 
   // Pagination states (10 items per page)
   const [studentsPage, setStudentsPage] = useState<number>(1);
@@ -266,6 +280,17 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   // Modal Xem chi tiết kết quả thi của 1 học sinh
   const [studentToViewResults, setStudentToViewResults] = useState<Student | null>(null);
   const [submissionToReview, setSubmissionToReview] = useState<ExamSubmission | null>(null);
+
+  // Tự động làm mới danh sách bài thi của học sinh khi giáo viên mở modal xem chi tiết kết quả
+  useEffect(() => {
+    if (studentToViewResults) {
+      refreshSubmissionsNow()
+        .then(() => {
+          setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+        })
+        .catch(() => {});
+    }
+  }, [studentToViewResults]);
 
   // Modal Xóa bài thi của học sinh (Dành cho Giáo Viên)
   const [submissionToDelete, setSubmissionToDelete] = useState<ExamSubmission | null>(null);
@@ -2172,32 +2197,65 @@ NOTIFY pgrst, 'reload schema';`;
                   </p>
                 </div>
 
-                {/* View Mode Switcher */}
-                <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start lg:self-auto">
-                  <button
-                    type="button"
-                    onClick={() => setStatsViewMode('submissions')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      statsViewMode === 'submissions'
-                        ? 'bg-white text-indigo-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <ListFilter className="w-3.5 h-3.5" />
-                    <span>Tất Cả Bài Thi ({gradingStats.total})</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStatsViewMode('byStudent')}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      statsViewMode === 'byStudent'
-                        ? 'bg-white text-indigo-700 shadow-xs'
-                        : 'text-slate-600 hover:text-slate-900'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Gộp Theo Học Sinh ({gradingStats.uniqueStudents})</span>
-                  </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Trạng thái Đồng bộ tức thì & Nút Làm Mới */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold" title="Hệ thống tự động đồng bộ thời gian thực khi học sinh nộp bài">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>Đồng bộ tức thì</span>
+                      <span className="text-[10px] text-emerald-600 font-normal">({lastSubRefreshTime})</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsRefreshingSubs(true);
+                        try {
+                          await refreshSubmissionsNow();
+                          setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+                          showToast('Đã làm mới và đồng bộ danh sách bài thi thành công!');
+                        } catch {
+                          showToast('Lỗi khi làm mới bài thi, vui lòng thử lại', 'error');
+                        } finally {
+                          setIsRefreshingSubs(false);
+                        }
+                      }}
+                      disabled={isRefreshingSubs}
+                      className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer border border-indigo-200 shadow-xs"
+                      title="Nạp bài nộp mới nhất của học sinh ngay lập tức mà không cần tải lại trang web"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSubs ? 'animate-spin text-indigo-600' : ''}`} />
+                      <span>{isRefreshingSubs ? 'Đang tải...' : 'Làm Mới Danh Sách'}</span>
+                    </button>
+                  </div>
+
+                  {/* View Mode Switcher */}
+                  <div className="flex items-center bg-slate-100 p-1 rounded-2xl border border-slate-200 self-start lg:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setStatsViewMode('submissions')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        statsViewMode === 'submissions'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <ListFilter className="w-3.5 h-3.5" />
+                      <span>Tất Cả Bài Thi ({gradingStats.total})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStatsViewMode('byStudent')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        statsViewMode === 'byStudent'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Gộp Theo Học Sinh ({gradingStats.uniqueStudents})</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

@@ -31,7 +31,7 @@ import { StudentPortal } from './components/StudentPortal.tsx';
 export default function App() {
   const [lang, setLang] = useState<Language>('vi');
 
-  // Firestore Real-time Collections
+  // Turso SQLite Cloud Real-time Collections
   const [schools, setSchools] = useState<School[]>([]);
   const [classes, setClasses] = useState<SchoolClass[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -46,12 +46,14 @@ export default function App() {
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
   const [currentUserData, setCurrentUserData] = useState<UserAccount | Student | null>(null);
 
-  // Initialize Firestore listeners
+  // Initialize Turso subscriptions and connection
   useEffect(() => {
-    // 1. Verify Firestore connectivity
-    testConnection().then((connected) => {
-      setIsLiveSync(connected);
-    });
+    // 1. Kiểm tra kết nối Turso Database
+    testConnection()
+      .then((connected) => {
+        setIsLiveSync(connected);
+      })
+      .catch(() => setIsLiveSync(false));
 
     // 2. Real-time subscriptions
     const unsubSchools = subscribeSchools((data) => setSchools(data));

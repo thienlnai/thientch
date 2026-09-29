@@ -116,6 +116,10 @@ export function validateTursoCredentials(url: string, token: string): boolean {
 export const activeUrl = getStoredUrl();
 export const activeToken = getStoredToken();
 
+export function isTursoConfigured(): boolean {
+  return getEffectiveTursoConfig().isConfigured;
+}
+
 export const isConfigured = validateTursoCredentials(activeUrl, activeToken);
 
 // Fallback URL if waiting for user credentials
