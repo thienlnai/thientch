@@ -12,6 +12,7 @@ import {
 } from '../utils/studentHelper.ts';
 import { autoSaveExamDraft } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
+import { ImageLightboxModal } from './ImageLightboxModal.tsx';
 import { ThientchLogo } from './ThientchLogo.tsx';
 import { 
   Clock, 
@@ -38,7 +39,8 @@ import {
   Wifi,
   WifiOff,
   Database,
-  HardDrive
+  HardDrive,
+  ZoomIn
 } from 'lucide-react';
 
 interface ExamTakingModalProps {
@@ -159,6 +161,19 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [draggedLeftPairId, setDraggedLeftPairId] = useState<string | null>(null);
   const [dragOverRightId, setDragOverRightId] = useState<string | null>(null);
   const [selectedLeftIdForClick, setSelectedLeftIdForClick] = useState<string | null>(null);
+
+  // Lightbox Zoom state for question and option images
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+
+  const handleOpenLightbox = (e: React.MouseEvent, url: string, title: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setLightboxImage({ url, title });
+  };
+
+  const handleCloseLightbox = () => {
+    setLightboxImage(null);
+  };
 
   const currentQ = shuffledQuestions[currentIndex];
   const totalQuestions = shuffledQuestions.length;
@@ -1282,11 +1297,21 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   {/* Phương tiện bổ trợ: Ảnh hoặc Video nếu có */}
                   {currentQ.mediaType === 'image' && currentQ.mediaUrl && (
                     <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white p-3 shadow-2xs">
-                      <img
-                        src={currentQ.mediaUrl}
-                        alt="Hình ảnh câu hỏi"
-                        className="max-h-80 mx-auto object-contain rounded-xl"
-                      />
+                      <div
+                        onClick={(e) => handleOpenLightbox(e, currentQ.mediaUrl!, `Hình ảnh câu hỏi ${currentIndex + 1}`)}
+                        className="group/qimg relative inline-block cursor-zoom-in max-w-full"
+                        title="Nhấp để phóng to hình ảnh câu hỏi"
+                      >
+                        <img
+                          src={currentQ.mediaUrl}
+                          alt="Hình ảnh câu hỏi"
+                          className="max-h-80 mx-auto object-contain rounded-xl transition-all duration-200 group-hover/qimg:brightness-105 group-hover/qimg:ring-2 group-hover/qimg:ring-indigo-400 group-hover/qimg:shadow-md"
+                        />
+                        <div className="absolute bottom-2.5 right-2.5 px-2.5 py-1 rounded-lg bg-slate-900/85 text-white text-xs font-bold flex items-center gap-1.5 shadow-md opacity-0 group-hover/qimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                          <ZoomIn className="w-3.5 h-3.5" />
+                          <span>Phóng to</span>
+                        </div>
+                      </div>
                     </div>
                   )}
 
@@ -1353,11 +1378,27 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                             <div className="flex-1 text-sm sm:text-base font-semibold text-slate-900 leading-snug">
                               {opt.text}
                               {opt.imageUrl && (
-                                <img
-                                  src={opt.imageUrl}
-                                  alt={`Đáp án ${charLabel}`}
-                                  className="mt-2.5 max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1"
-                                />
+                                <div
+                                  onClick={(e) =>
+                                    handleOpenLightbox(
+                                      e,
+                                      opt.imageUrl!,
+                                      `Đáp án ${charLabel}: ${opt.text || ''}`
+                                    )
+                                  }
+                                  className="group/optimg relative inline-block cursor-zoom-in mt-2.5 max-w-full"
+                                  title="Nhấp để phóng to hình ảnh đáp án (Không chọn đáp án)"
+                                >
+                                  <img
+                                    src={opt.imageUrl}
+                                    alt={`Đáp án ${charLabel}`}
+                                    className="max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1 transition-all duration-200 group-hover/optimg:border-indigo-500 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-300 group-hover/optimg:brightness-105"
+                                  />
+                                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-bold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>Phóng to</span>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1401,11 +1442,27 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                             <div className="flex-1 text-sm sm:text-base font-semibold text-slate-900 leading-snug">
                               {opt.text}
                               {opt.imageUrl && (
-                                <img
-                                  src={opt.imageUrl}
-                                  alt={`Đáp án ${charLabel}`}
-                                  className="mt-2.5 max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1"
-                                />
+                                <div
+                                  onClick={(e) =>
+                                    handleOpenLightbox(
+                                      e,
+                                      opt.imageUrl!,
+                                      `Đáp án ${charLabel}: ${opt.text || ''}`
+                                    )
+                                  }
+                                  className="group/optimg relative inline-block cursor-zoom-in mt-2.5 max-w-full"
+                                  title="Nhấp để phóng to hình ảnh đáp án (Không chọn đáp án)"
+                                >
+                                  <img
+                                    src={opt.imageUrl}
+                                    alt={`Đáp án ${charLabel}`}
+                                    className="max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1 transition-all duration-200 group-hover/optimg:border-indigo-500 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-300 group-hover/optimg:brightness-105"
+                                  />
+                                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-bold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>Phóng to</span>
+                                  </div>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1519,11 +1576,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                                         {pair.leftText}
                                       </p>
                                       {pair.leftImageUrl && (
-                                        <img
-                                          src={pair.leftImageUrl}
-                                          alt="Hình ảnh ghép"
-                                          className="mt-2 max-h-24 rounded-xl border border-slate-200 object-cover bg-white"
-                                        />
+                                        <div
+                                          onClick={(e) =>
+                                            handleOpenLightbox(
+                                              e,
+                                              pair.leftImageUrl!,
+                                              `Thẻ A${pIdx + 1}: ${pair.leftText}`
+                                            )
+                                          }
+                                          className="group/pairimg relative inline-block cursor-zoom-in mt-2"
+                                          title="Nhấp để phóng to hình ảnh"
+                                        >
+                                          <img
+                                            src={pair.leftImageUrl}
+                                            alt="Hình ảnh ghép"
+                                            className="mt-1 max-h-24 rounded-xl border border-slate-200 object-cover bg-white transition-all duration-200 group-hover/pairimg:ring-2 group-hover/pairimg:ring-indigo-400 group-hover/pairimg:brightness-105"
+                                          />
+                                          <div className="absolute bottom-1 right-1 p-1 rounded-md bg-slate-900/85 text-white opacity-0 group-hover/pairimg:opacity-100 transition-opacity pointer-events-none">
+                                            <ZoomIn className="w-3 h-3" />
+                                          </div>
+                                        </div>
                                       )}
                                       
                                       {isMatched && (
@@ -1633,11 +1705,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                                           {rightP.rightText}
                                         </p>
                                         {rightP.rightImageUrl && (
-                                          <img
-                                            src={rightP.rightImageUrl}
-                                            alt="Hình ảnh minh họa"
-                                            className="mt-2 max-h-24 rounded-xl border border-slate-200 object-cover bg-white"
-                                          />
+                                          <div
+                                            onClick={(e) =>
+                                              handleOpenLightbox(
+                                                e,
+                                                rightP.rightImageUrl!,
+                                                `Thẻ B${rIdx + 1}: ${rightP.rightText}`
+                                              )
+                                            }
+                                            className="group/pairimg relative inline-block cursor-zoom-in mt-2"
+                                            title="Nhấp để phóng to hình ảnh"
+                                          >
+                                            <img
+                                              src={rightP.rightImageUrl}
+                                              alt="Hình ảnh minh họa"
+                                              className="mt-1 max-h-24 rounded-xl border border-slate-200 object-cover bg-white transition-all duration-200 group-hover/pairimg:ring-2 group-hover/pairimg:ring-indigo-400 group-hover/pairimg:brightness-105"
+                                            />
+                                            <div className="absolute bottom-1 right-1 p-1 rounded-md bg-slate-900/85 text-white opacity-0 group-hover/pairimg:opacity-100 transition-opacity pointer-events-none">
+                                              <ZoomIn className="w-3 h-3" />
+                                            </div>
+                                          </div>
                                         )}
                                       </div>
                                     </div>
@@ -1654,11 +1741,23 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                                               {connected.leftPair.leftText}
                                             </span>
                                             {connected.leftPair.leftImageUrl && (
-                                              <img
-                                                src={connected.leftPair.leftImageUrl}
-                                                alt="Ảnh"
-                                                className="h-6 w-8 object-cover rounded border border-slate-200 shrink-0"
-                                              />
+                                              <div
+                                                onClick={(e) =>
+                                                  handleOpenLightbox(
+                                                    e,
+                                                    connected.leftPair.leftImageUrl!,
+                                                    `Ảnh thẻ A${connected.leftIndex + 1}`
+                                                  )
+                                                }
+                                                className="cursor-zoom-in group/connimg relative inline-block shrink-0"
+                                                title="Nhấp để phóng to"
+                                              >
+                                                <img
+                                                  src={connected.leftPair.leftImageUrl}
+                                                  alt="Ảnh"
+                                                  className="h-6 w-8 object-cover rounded border border-slate-200 group-hover/connimg:ring-1 group-hover/connimg:ring-indigo-500"
+                                                />
+                                              </div>
                                             )}
                                           </div>
                                           <button
@@ -2024,6 +2123,14 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           </div>
         </aside>
       </div>
+
+      {/* ================= MODAL PHÓNG TO HÌNH ẢNH (LIGHTBOX) ================= */}
+      <ImageLightboxModal
+        isOpen={Boolean(lightboxImage)}
+        imageUrl={lightboxImage?.url || null}
+        title={lightboxImage?.title}
+        onClose={handleCloseLightbox}
+      />
     </div>
   );
 };

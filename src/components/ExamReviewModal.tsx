@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
+import { ImageLightboxModal } from './ImageLightboxModal.tsx';
 import { 
   X, 
   Award, 
@@ -15,7 +16,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles,
-  Trash2
+  Trash2,
+  ZoomIn
 } from 'lucide-react';
 
 interface ExamReviewModalProps {
@@ -35,6 +37,19 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
 }) => {
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+
+  // Lightbox Zoom state for review images
+  const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
+
+  const handleOpenLightbox = (e: React.MouseEvent, url: string, title: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setLightboxImage({ url, title });
+  };
+
+  const handleCloseLightbox = () => {
+    setLightboxImage(null);
+  };
 
   // Tái tạo danh sách câu hỏi một cách thông minh:
   // 1. Dùng snapshot có sẵn trong bộ nhớ (nếu vừa thi xong)
@@ -415,11 +430,21 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                 {/* Media ảnh hoặc video */}
                 {currentQ.mediaType === 'image' && currentQ.mediaUrl && (
                   <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
-                    <img
-                      src={currentQ.mediaUrl}
-                      alt="Ảnh câu hỏi"
-                      className="max-h-64 mx-auto object-contain rounded-xl"
-                    />
+                    <div
+                      onClick={(e) => handleOpenLightbox(e, currentQ.mediaUrl!, `Hình ảnh câu hỏi ${selectedQuestionIndex + 1}`)}
+                      className="group/qimg relative inline-block cursor-zoom-in max-w-full"
+                      title="Nhấp để phóng to hình ảnh câu hỏi"
+                    >
+                      <img
+                        src={currentQ.mediaUrl}
+                        alt="Ảnh câu hỏi"
+                        className="max-h-64 mx-auto object-contain rounded-xl transition-all duration-200 group-hover/qimg:brightness-105 group-hover/qimg:ring-2 group-hover/qimg:ring-indigo-400"
+                      />
+                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-bold flex items-center gap-1 shadow-md opacity-0 group-hover/qimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                        <ZoomIn className="w-3 h-3" />
+                        <span>Phóng to</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -571,11 +596,19 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                             </span>
                             <span className="text-sm">{p.leftText}</span>
                             {p.leftImageUrl && (
-                              <img
-                                src={p.leftImageUrl}
-                                alt="Ảnh ghép đôi"
-                                className="h-10 w-14 object-cover rounded-lg border border-slate-300"
-                              />
+                              <div
+                                onClick={(e) =>
+                                  handleOpenLightbox(e, p.leftImageUrl!, `Ảnh thẻ A${idx + 1}: ${p.leftText}`)
+                                }
+                                className="cursor-zoom-in group/mimg relative inline-block shrink-0"
+                                title="Nhấp để phóng to"
+                              >
+                                <img
+                                  src={p.leftImageUrl}
+                                  alt="Ảnh ghép đôi"
+                                  className="h-10 w-14 object-cover rounded-lg border border-slate-300 transition-all group-hover/mimg:ring-2 group-hover/mimg:ring-indigo-400"
+                                />
+                              </div>
                             )}
                           </div>
                           <div className="space-y-1">
@@ -755,6 +788,14 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
           </button>
         </footer>
       </div>
+
+      {/* ================= LIGHTBOX PHÓNG TO HÌNH ẢNH ================= */}
+      <ImageLightboxModal
+        isOpen={Boolean(lightboxImage)}
+        imageUrl={lightboxImage?.url || null}
+        title={lightboxImage?.title}
+        onClose={handleCloseLightbox}
+      />
     </div>
   );
 };
