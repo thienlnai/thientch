@@ -3007,20 +3007,144 @@ export async function mergeExams(
 
 // ================= CRUD: SUBMISSIONS =================
 
-export async function addExamSubmission(data: Omit<ExamSubmission, 'id'>): Promise<ExamSubmission> {
+/**
+ * Nộp bài thi dạng BATCH duy nhất với RETRY tự động:
+ * - Tuyệt đối không dùng vòng lặp for...of để db.execute từng câu hỏi hoặc từng bảng.
+ * - Gom toàn bộ dữ liệu bài nộp vào đúng một Transaction duy nhất (db.batch(queries, "write"))
+ *   nhằm tránh nghẽn write-lock và giảm thiểu số lượng kết nối mạng.
+ * - Tự động thử lại tối thiểu 3 lần với Exponential Backoff khi gặp sự cố mạng (ECONNRESET, timeout, fetch failed...).
+ */
+export async function submitExamBatch(data: Omit<ExamSubmission, 'id'>): Promise<ExamSubmission> {
   const newSubmission: ExamSubmission = {
     ...data,
     id: `sub_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
   };
 
+  // 1. Cập nhật state & local memory ngay lập tức để học sinh thấy kết quả tức thì
   localSubmissions = sortBySubmittedAt([newSubmission, ...localSubmissions]);
   notifySubmissions();
 
   if (isConfigured) {
-    await safeDbUpsert(SUBMISSIONS_TABLE, newSubmission);
+    const row = toDbSubmissionRow(newSubmission);
+    const keys = Object.keys(row);
+    const quotedCols = keys.map((k) => `"${k}"`).join(', ');
+    const placeholders = keys.map(() => '?').join(', ');
+    const updateClauses = keys
+      .filter((k) => k !== 'id')
+      .map((k) => `"${k}" = excluded."${k}"`)
+      .join(', ');
+
+    const values = keys.map((k) => {
+      const val = row[k];
+      if (val === undefined) return null;
+      if (typeof val === 'object' && val !== null) return JSON.stringify(val);
+      if (typeof val === 'boolean') return val ? 1 : 0;
+      return val;
+    });
+
+    const batchStatements: Array<{ sql: string; args: any[] }> = [
+      {
+        sql: `INSERT INTO "${SUBMISSIONS_TABLE}" (${quotedCols}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${updateClauses}`,
+        args: values,
+      },
+      {
+        sql: `INSERT INTO "${AUDIT_LOGS_TABLE}" (id, action, actor, details, createdAt) VALUES (?, ?, ?, ?, datetime('now'))`,
+        args: [
+          `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          'SUBMIT_EXAM',
+          newSubmission.studentName || newSubmission.studentId,
+          `Nộp bài: ${newSubmission.examTitle} (${newSubmission.score}/1000đ)`
+        ],
+      },
+    ];
+
+    // Thực thi trong đúng một Transaction duy nhất qua tursoBatch (gọi db.batch(statements, 'write') kèm Retry 3 lần)
+    await tursoBatch(batchStatements);
   }
+
   return newSubmission;
 }
+
+/**
+ * Auto-save đồng bộ ngầm bản nháp bài thi lên server sau mỗi 30 giây:
+ * - Không chặn luồng thao tác của học sinh.
+ * - Thử gửi qua API serverless /api/submit-exam hoặc trực tiếp Turso.
+ * - Nếu gặp lỗi mạng tạm thời, tự động bắt lỗi an toàn để bảo vệ trải nghiệm thi.
+ */
+export async function autoSaveExamDraft(draft: {
+  examId: string;
+  studentId: string;
+  studentName?: string;
+  studentCode?: string;
+  classId?: string;
+  answers: Record<string, any>;
+  timeRemaining?: number;
+}): Promise<boolean> {
+  try {
+    // 1. Thử gửi qua API endpoint nếu môi trường hỗ trợ
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      try {
+        const res = await fetch('/api/submit-exam', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            submission: {
+              id: `draft_${draft.examId}_${draft.studentId}`,
+              examId: draft.examId,
+              examTitle: 'Bản nháp làm bài',
+              studentId: draft.studentId,
+              studentName: draft.studentName || 'Học sinh',
+              studentCode: draft.studentCode || '',
+              classId: draft.classId || '',
+              score: 0,
+              isPassed: false,
+              studentAnswers: draft.answers,
+              timeSpentSeconds: draft.timeRemaining !== undefined ? Math.max(0, draft.timeRemaining) : 0,
+            },
+            isDraft: true,
+          }),
+          signal: typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function'
+            ? AbortSignal.timeout(8000)
+            : undefined,
+        });
+        if (res.ok) return true;
+      } catch {
+        // Fallback sang Turso client
+      }
+    }
+
+    // 2. Nếu có cấu hình Turso trực tiếp, ghi bản nháp qua tursoBatch (Single transaction)
+    if (isConfigured) {
+      const draftId = `draft_${draft.examId}_${draft.studentId}`;
+      const statements = [
+        {
+          sql: `INSERT INTO "${SUBMISSIONS_TABLE}" (id, examId, examTitle, studentId, studentName, studentCode, classId, score, isPassed, studentAnswers, timeSpentSeconds, isTeacherTesting)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0)
+                ON CONFLICT(id) DO UPDATE SET studentAnswers = excluded.studentAnswers, timeSpentSeconds = excluded.timeSpentSeconds`,
+          args: [
+            draftId,
+            draft.examId,
+            'Bản nháp thi',
+            draft.studentId,
+            draft.studentName || 'Học sinh',
+            draft.studentCode || '',
+            draft.classId || '',
+            JSON.stringify(draft.answers || {}),
+            draft.timeRemaining !== undefined ? Math.max(0, draft.timeRemaining) : 0,
+          ],
+        },
+      ];
+      await tursoBatch(statements);
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.warn('[Auto-Save Sync] Lưu ngầm không thành công (bản nháp vẫn an toàn trên thiết bị):', err);
+    return false;
+  }
+}
+
+export const addExamSubmission = submitExamBatch;
 
 export async function deleteExamSubmission(id: string): Promise<void> {
   localSubmissions = localSubmissions.filter((s) => s.id !== id);

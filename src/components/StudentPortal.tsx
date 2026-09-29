@@ -678,6 +678,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
               showToast(`Đã nộp bài thi thành công! Điểm số: ${submission.score}/1000đ`);
             } catch (err) {
               console.error('Lỗi lưu submission:', err);
+              throw err;
             }
           }}
           onReviewAnswers={(submission) => {

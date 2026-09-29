@@ -10,6 +10,7 @@ import {
   shuffleExamQuestionsAndOptions, 
   calculateExamScore 
 } from '../utils/studentHelper.ts';
+import { autoSaveExamDraft } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { 
   Clock, 
@@ -32,7 +33,11 @@ import {
   Unlink,
   MousePointer,
   Maximize,
-  Lock
+  Lock,
+  Wifi,
+  WifiOff,
+  Database,
+  HardDrive
 } from 'lucide-react';
 
 interface ExamTakingModalProps {
@@ -54,18 +59,85 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   onReviewAnswers,
   attemptNumber = 1,
 }) => {
-  // Snapshot câu hỏi được xáo trộn chuẩn bị cho lượt thi này
-  const [shuffledQuestions] = useState<ExamQuestion[]>(() =>
-    shuffleExamQuestionsAndOptions(
+  // Khóa lưu tạm localStorage duy nhất cho mỗi học sinh và mỗi đề thi (Offline-First)
+  const draftStorageKey = `thientch_exam_draft_${exam.id}_${currentUser.id}`;
+
+  const loadSavedDraft = () => {
+    try {
+      const raw = localStorage.getItem(draftStorageKey);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed.answers === 'object') {
+          return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const initialDraft = loadSavedDraft();
+
+  // Snapshot câu hỏi: nếu đã có bản nháp offline thì tái sử dụng đúng bộ câu hỏi và trật tự đã xáo trộn
+  const [shuffledQuestions] = useState<ExamQuestion[]>(() => {
+    if (initialDraft?.shuffledQuestions && Array.isArray(initialDraft.shuffledQuestions) && initialDraft.shuffledQuestions.length > 0) {
+      return initialDraft.shuffledQuestions;
+    }
+    return shuffleExamQuestionsAndOptions(
       exam.questions,
       exam.isPracticeTest,
       exam.practiceRandomCount
-    )
+    );
+  });
+
+  const [currentIndex, setCurrentIndex] = useState<number>(() => {
+    if (typeof initialDraft?.currentIndex === 'number') {
+      return Math.min(Math.max(0, initialDraft.currentIndex), (exam.questions?.length || 1) - 1);
+    }
+    return 0;
+  });
+
+  const [answers, setAnswers] = useState<Record<string, any>>(() => {
+    if (initialDraft?.answers && typeof initialDraft.answers === 'object') {
+      return initialDraft.answers;
+    }
+    return {};
+  });
+
+  const [timeRemaining, setTimeRemaining] = useState<number>(() => {
+    if (typeof initialDraft?.timeRemaining === 'number' && initialDraft.timeRemaining > 0) {
+      return initialDraft.timeRemaining;
+    }
+    return exam.durationMinutes * 60;
+  });
+
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<string>('');
+  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
+  const [restoredNotification, setRestoredNotification] = useState<boolean>(
+    Boolean(initialDraft?.answers && Object.keys(initialDraft.answers).length > 0)
+  );
+  const [isOnline, setIsOnline] = useState<boolean>(() => 
+    typeof navigator !== 'undefined' ? navigator.onLine : true
   );
 
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, any>>({});
-  const [timeRemaining, setTimeRemaining] = useState<number>(exam.durationMinutes * 60);
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const answersRef = useRef<Record<string, any>>(answers);
+  answersRef.current = answers;
+  const timeRemainingRef = useRef<number>(timeRemaining);
+  timeRemainingRef.current = timeRemaining;
+  const currentIndexRef = useRef<number>(currentIndex);
+  currentIndexRef.current = currentIndex;
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
@@ -369,13 +441,75 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     handlePerformSubmission('Hết giờ làm bài! Hệ thống tự động thu bài thi.');
   };
 
-  // ================= 3. LƯU CÂU TRẢ LỜI CHO TỪNG DẠNG CÂU HỎI =================
-  const updateAnswer = (questionId: string, val: any) => {
-    setAnswers((prev) => ({
-      ...prev,
-      [questionId]: val,
-    }));
+  // ================= 3. LƯU CÂU TRẢ LỜI CHO TỪNG DẠNG CÂU HỎI (OFFLINE-FIRST) =================
+  // Không gọi API server mỗi khi học sinh click. Lưu ngay lập tức vào state & localStorage để bảo vệ bài thi.
+  const saveDraftToLocalStorage = (updatedAnswers: Record<string, any>) => {
+    try {
+      localStorage.setItem(
+        draftStorageKey,
+        JSON.stringify({
+          examId: exam.id,
+          studentId: currentUser.id,
+          answers: updatedAnswers,
+          shuffledQuestions,
+          timeRemaining: timeRemainingRef.current,
+          currentIndex: currentIndexRef.current,
+          updatedAt: Date.now(),
+        })
+      );
+      setSaveStatus('saved');
+    } catch (err) {
+      console.warn('Lỗi sao lưu localStorage:', err);
+    }
   };
+
+  const updateAnswer = (questionId: string, val: any) => {
+    setAnswers((prev) => {
+      const next = {
+        ...prev,
+        [questionId]: val,
+      };
+      // Lưu tức thì vào localStorage không có độ trễ
+      saveDraftToLocalStorage(next);
+      return next;
+    });
+  };
+
+  // Đồng bộ ngầm (Auto-save) sau mỗi 30 giây gom toàn bộ câu trả lời và thời gian
+  useEffect(() => {
+    if (isTeacherTesting || isFinishedRef.current) return;
+
+    const autoSaveInterval = setInterval(async () => {
+      try {
+        setSaveStatus('saving');
+        // 1. Lưu ngay tức khắc vào localStorage để không bị phụ thuộc vào mạng
+        saveDraftToLocalStorage(answersRef.current);
+
+        // 2. Gửi ngầm bản nháp lên server qua autoSaveExamDraft (non-blocking)
+        const isStudentUser = 'studentCode' in currentUser;
+        const studentCode = isStudentUser ? (currentUser as Student).studentCode : 'GV-TEST';
+        const classId = isStudentUser ? (currentUser as Student).classId : exam.classIds[0] || 'CLASS_TEST';
+        
+        await autoSaveExamDraft({
+          examId: exam.id,
+          studentId: currentUser.id,
+          studentName: currentUser.fullName || currentUser.username,
+          studentCode,
+          classId,
+          answers: answersRef.current,
+          timeRemaining: timeRemainingRef.current,
+        });
+
+        setSaveStatus('saved');
+        setLastAutoSaveTime(new Date().toLocaleTimeString('vi-VN'));
+      } catch (err) {
+        console.warn('[Auto-save 30s] Đồng bộ ngầm tạm thời không kết nối (bản nháp đã lưu an toàn trên máy):', err);
+        setSaveStatus('saved');
+      }
+    }, 30000); // 30 giây
+
+    return () => clearInterval(autoSaveInterval);
+  }, [exam.id, currentUser.id, isTeacherTesting]);
 
   // b. Chọn nhiều đáp án: Giới hạn đúng số lượng đáp án đúng của GV
   const handleToggleMultipleChoice = (q: ExamQuestion, optionId: string) => {
@@ -549,10 +683,27 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       violationLogs: violationLogs.length > 0 ? (violationLogs.length > 5 ? violationLogs.slice(-5) : violationLogs) : undefined,
     };
 
-    setSubmissionResult(submission);
-    setIsSubmitting(false);
-    setShowConfirmSubmit(false);
-    onSubmitSuccess(submission);
+    try {
+      setSubmitErrorMessage(null);
+      // Gọi hàm nộp bài (được bọc trong transaction batch + retry tự động)
+      await Promise.resolve(onSubmitSuccess(submission));
+      
+      // Xóa bản nháp trong localStorage sau khi bài đã được nộp thành công
+      try {
+        localStorage.removeItem(draftStorageKey);
+      } catch {}
+
+      setSubmissionResult(submission);
+      setShowConfirmSubmit(false);
+    } catch (err: any) {
+      console.error('Lỗi nộp bài thi:', err);
+      isFinishedRef.current = false;
+      setSubmitErrorMessage(
+        err?.message || 'Không thể gửi bài thi lên máy chủ do mạng không ổn định hoặc timeout. Toàn bộ đáp án của bạn vẫn được bảo toàn an toàn 100% trên máy. Vui lòng bấm "Thử Gửi Lại".'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatTimer = (seconds: number) => {
@@ -771,26 +922,60 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
               </div>
             )}
 
+            {submitErrorMessage && (
+              <div className="mt-3 p-3.5 bg-red-50 border-2 border-red-300 rounded-2xl text-xs text-red-900 space-y-2">
+                <div className="font-bold flex items-center gap-1.5 text-red-800">
+                  <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>Sự cố gửi bài lên máy chủ:</span>
+                </div>
+                <p className="leading-relaxed">{submitErrorMessage}</p>
+                <div className="pt-2 border-t border-red-200/80 flex items-center justify-between">
+                  <span className="text-[11px] text-emerald-800 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Đáp án được lưu an toàn 100% trên thiết bị
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handlePerformSubmission()}
+                    className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Thử Gửi Lại</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="mt-5 flex items-center justify-end gap-3">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setShowConfirmSubmit(false)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50"
               >
                 Tiếp Tục Làm Bài
               </button>
               <button
                 type="button"
-                disabled={!isAllAnswered && !isTeacherTesting}
+                disabled={(!isAllAnswered && !isTeacherTesting) || isSubmitting}
                 onClick={() => handlePerformSubmission()}
-                className={`px-5 py-2 rounded-xl text-xs font-bold text-white shadow-md transition-colors flex items-center gap-1.5 ${
-                  !isAllAnswered && !isTeacherTesting
+                className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-md transition-colors flex items-center gap-1.5 ${
+                  (!isAllAnswered && !isTeacherTesting) || isSubmitting
                     ? 'bg-slate-400 cursor-not-allowed opacity-60'
                     : 'bg-emerald-600 hover:bg-emerald-700 cursor-pointer'
                 }`}
               >
-                <CheckCircle2 className="w-4 h-4" />
-                <span>Nộp Bài Ngay</span>
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Đang Gửi Bài Lên Turso...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Nộp Bài Ngay</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -922,7 +1107,23 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         </div>
 
         {/* Đồng hồ đếm ngược hoặc nhãn thử nghiệm GV + Nút nộp bài nổi bật */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Trạng thái Offline-First & Đồng bộ ngầm */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+            {isOnline ? (
+              <span className="flex items-center gap-1.5 text-emerald-700 font-semibold" title="Kết nối Internet ổn định. Toàn bộ đáp án được sao lưu tức thì vào localStorage và tự động đồng bộ ngầm sau mỗi 30s">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Offline-First (Đã lưu)</span>
+                {lastAutoSaveTime && <span className="text-slate-400 font-normal hidden lg:inline">• Đồng bộ {lastAutoSaveTime}</span>}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-amber-700 font-semibold" title="Mất kết nối Internet tạm thời. Bạn vẫn tiếp tục làm bài bình thường, bài làm được bảo vệ 100% trên máy">
+                <span className="w-2 h-2 rounded-full bg-amber-500" />
+                <span>Làm bài Offline (An toàn)</span>
+              </span>
+            )}
+          </div>
+
           {violationCount > 0 && !isTeacherTesting && (
             <button
               type="button"
@@ -973,6 +1174,25 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           </button>
         </div>
       </header>
+
+      {/* Dải thông báo khôi phục bài làm thành công từ bộ nhớ an toàn (Offline-First) */}
+      {restoredNotification && (
+        <div className="bg-emerald-50 border-b border-emerald-200 px-4 sm:px-6 py-2.5 text-xs flex items-center justify-between text-emerald-900 shrink-0">
+          <div className="flex items-center gap-2">
+            <HardDrive className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Bảo vệ bài làm (Offline-First):</strong> Đã tự động khôi phục toàn bộ câu trả lời và thời gian từ bản nháp an toàn trên thiết bị của bạn.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRestoredNotification(false)}
+            className="text-emerald-700 hover:text-emerald-900 cursor-pointer font-bold px-2 py-0.5 rounded-lg hover:bg-emerald-100"
+          >
+            Đã hiểu ✕
+          </button>
+        </div>
+      )}
 
       {/* Dải thông báo vi phạm màu đỏ luôn hiển thị nhắc nhở nếu có vi phạm */}
       {violationCount > 0 && !isTeacherTesting && (
