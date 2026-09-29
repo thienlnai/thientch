@@ -99,7 +99,7 @@ interface TeacherPortalProps {
   lang: Language;
 }
 
-type TeacherTab = 'students' | 'exams' | 'grading' | 'classes';
+type TeacherTab = 'classes' | 'exams' | 'grading';
 
 export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   teacher,
@@ -111,7 +111,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   onLogout,
   lang,
 }) => {
-  const [activeTab, setActiveTab] = useState<TeacherTab>('students');
+  const [activeTab, setActiveTab] = useState<TeacherTab>('classes');
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMsg, setToastMsg] = useState<{ text: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
@@ -187,9 +187,20 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
     })).sort((a, b) => b.classes.length - a.classes.length);
   }, [assignedClasses, schools, students, teacher.schoolId, teacher.schoolIds]);
 
-  // Bộ lọc trường học trong tab Lớp học
-  const [schoolFilterForClasses, setSchoolFilterForClasses] = useState<string>('all');
-  const [classSearchInClassesTab, setClassSearchInClassesTab] = useState<string>('');
+  // Bộ lọc trường học và lớp học trong tab Quản Lý Lớp Học
+  const [selectedSchoolId, setSelectedSchoolId] = useState<string>('all');
+  const [showClassOverviewDrawer, setShowClassOverviewDrawer] = useState<boolean>(false);
+
+  // Danh sách các lớp thuộc trường đang chọn ở Dropdown 1
+  const availableClassesForSchool = useMemo(() => {
+    if (selectedSchoolId === 'all') return assignedClasses;
+    return assignedClasses.filter((c) => c.schoolId === selectedSchoolId);
+  }, [assignedClasses, selectedSchoolId]);
+
+  // Bộ lọc lớp đang chọn (Dropdown 2)
+  const [selectedClassId, setSelectedClassId] = useState<string>(
+    assignedClasses[0]?.id || 'all'
+  );
 
   // Học sinh thuộc các lớp được phân công
   const assignedStudents = useMemo(() => {
@@ -200,11 +211,6 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const teacherExams = useMemo(() => {
     return exams.filter((e) => e.creatorId === teacher.id || e.creatorId === teacher.username || e.creatorName === teacher.fullName);
   }, [exams, teacher.id, teacher.username, teacher.fullName]);
-
-  // Bộ lọc lớp đang chọn
-  const [selectedClassId, setSelectedClassId] = useState<string>(
-    assignedClasses[0]?.id || ''
-  );
 
   // Ngày hôm nay và hôm qua theo định dạng YYYY-MM-DD
   const todayDateStr = useMemo(() => new Date().toLocaleDateString('en-CA'), []);
@@ -1141,12 +1147,21 @@ NOTIFY pgrst, 'reload schema';`;
     return studentModalSubmissions.filter((s) => isMatchingDate(s, studentModalDateFilter));
   }, [studentModalSubmissions, studentModalDateFilter]);
 
-  // Lọc học sinh theo lớp và ô tìm kiếm
+  // Lọc học sinh theo trường, lớp và ô tìm kiếm
   const filteredStudents = useMemo(() => {
     let list = assignedStudents;
-    if (selectedClassId) {
+    // 1. Lọc theo trường học đã chọn ở Dropdown 1
+    if (selectedSchoolId !== 'all') {
+      const schoolClassIdSet = new Set(
+        assignedClasses.filter((c) => c.schoolId === selectedSchoolId).map((c) => c.id)
+      );
+      list = list.filter((s) => s.classId && schoolClassIdSet.has(s.classId));
+    }
+    // 2. Lọc theo lớp học đã chọn ở Dropdown 2
+    if (selectedClassId && selectedClassId !== 'all') {
       list = list.filter((s) => s.classId === selectedClassId);
     }
+    // 3. Tìm kiếm theo từ khóa (họ tên, mã HS, tài khoản)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(
@@ -1157,7 +1172,7 @@ NOTIFY pgrst, 'reload schema';`;
       );
     }
     return list;
-  }, [assignedStudents, selectedClassId, searchQuery]);
+  }, [assignedStudents, assignedClasses, selectedSchoolId, selectedClassId, searchQuery]);
 
   // Paginated calculations (10 items per page)
   const totalStudentPages = Math.max(1, Math.ceil(filteredStudents.length / 10));
@@ -1240,7 +1255,12 @@ NOTIFY pgrst, 'reload schema';`;
   }, [filteredStudentModalSubmissions, currentStudentModalSubsPage]);
 
   const teacherMenuItems: SidebarMenuItem[] = [
-    { id: 'students', label: 'Quản Lý Học Sinh', icon: Users, badge: assignedStudents.length },
+    { 
+      id: 'classes', 
+      label: 'Quản Lý Lớp Học', 
+      icon: Users, 
+      badge: assignedStudents.length > 0 ? `${assignedStudents.length} HS` : (assignedClasses.length > 0 ? `${assignedClasses.length} lớp` : undefined) 
+    },
     { id: 'exams', label: 'Quản Lý Đề Thi', icon: FileText, badge: teacherExams.length },
     { 
       id: 'grading', 
@@ -1248,7 +1268,6 @@ NOTIFY pgrst, 'reload schema';`;
       icon: BarChart3, 
       badge: todaySubmissionsCount > 0 ? `${todaySubmissionsCount} hôm nay` : (teacherSubmissions.length > 0 ? teacherSubmissions.length : undefined) 
     },
-    { id: 'classes', label: 'Quản Lý Lớp Học', icon: BookOpen, badge: assignedClasses.length },
   ];
 
   return (
@@ -1358,93 +1377,155 @@ NOTIFY pgrst, 'reload schema';`;
             </div>
           )}
 
-          {/* ================= TAB 1: QUẢN LÝ HỌC SINH & XEM KẾT QUẢ THI THEO NGÀY ================= */}
-          {activeTab === 'students' && (
-            <div className="space-y-6">
-              {/* Header Action Bar */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-slate-200 shadow-xs">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Users className="w-5 h-5 text-indigo-600" />
-                    <span>Học Sinh Trong Các Lớp Được Phân Công ({assignedStudents.length})</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Thêm học sinh đơn / Excel (tự sinh mã, username, pass 123@456, email), xem điểm và số lần thi theo ngày.
-                  </p>
+          {/* ================= TAB: QUẢN LÝ LỚP HỌC (GỘP HỌC SINH & LỚP HỌC) ================= */}
+          {activeTab === 'classes' && (
+            <div className="space-y-6 animate-in fade-in duration-200">
+              {/* Header Box & KPI Summary */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs shrink-0">
+                    <GraduationCap className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                      <span>Quản Lý Lớp Học</span>
+                      <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-100">
+                        {assignedClasses.length} lớp phụ trách
+                      </span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Theo dõi danh sách học sinh, cấp tài khoản, tra cứu điểm cao nhất và số lần làm bài theo từng ngày.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => setIsAddSingleStudentModalOpen(true)}
-                    disabled={assignedClasses.length === 0}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>Thêm Đơn Học Sinh</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsAddExcelModalOpen(true)}
-                    disabled={assignedClasses.length === 0}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <FileSpreadsheet className="w-4 h-4" />
-                    <span>Thêm Bằng File Excel</span>
-                  </button>
+                {/* KPI Badges */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200/80 text-purple-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                    <SchoolIcon className="w-4 h-4 text-purple-600" />
+                    <span>{teacherSchools.length} Trường Phụ Trách</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200/80 text-indigo-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                    <BookOpen className="w-4 h-4 text-indigo-600" />
+                    <span>{assignedClasses.length} Lớp Giảng Dạy</span>
+                  </div>
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                    <Users className="w-4 h-4 text-emerald-600" />
+                    <span>{assignedStudents.length} Học Sinh</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Bộ lọc lớp và Bộ lọc ngày thống kê bài thi (Requirement A.2) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Lọc Theo Lớp Học Phụ Trách
-                  </label>
-                  <select
-                    value={selectedClassId}
-                    onChange={(e) => setSelectedClassId(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
-                  >
-                    {teacherSchools.map((ts) => (
-                      <optgroup key={ts.schoolId} label={`🏫 ${ts.schoolName}`}>
-                        {ts.classes.map((c) => (
+              {/* KHU VỰC BỘ LỌC (FILTERS - 3 DANH SÁCH THẢ XUỐNG XẾP CẠNH NHAU) */}
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Dropdown 1: Trường được phân công */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <SchoolIcon className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Trường Được Phân Công</span>
+                    </label>
+                    <select
+                      value={selectedSchoolId}
+                      onChange={(e) => {
+                        const newSchoolId = e.target.value;
+                        setSelectedSchoolId(newSchoolId);
+                        setStudentsPage(1);
+                        if (newSchoolId !== 'all') {
+                          const schoolClasses = assignedClasses.filter((c) => c.schoolId === newSchoolId);
+                          if (schoolClasses.length > 0) {
+                            if (!schoolClasses.some((c) => c.id === selectedClassId)) {
+                              setSelectedClassId(schoolClasses[0].id);
+                              setSingleStudentClassId(schoolClasses[0].id);
+                              setExcelClassId(schoolClasses[0].id);
+                            }
+                          } else {
+                            setSelectedClassId('all');
+                          }
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="all">🏫 Tất cả các trường phụ trách ({teacherSchools.length} trường)</option>
+                      {teacherSchools.map((ts) => (
+                        <option key={ts.schoolId} value={ts.schoolId}>
+                          🏫 {ts.schoolName} ({ts.classes.length} lớp • {ts.studentCount} HS)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Dropdown 2: Lớp được phân công (Dữ liệu phụ thuộc vào Trường đã chọn) */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <GraduationCap className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Lớp Được Phân Công</span>
+                    </label>
+                    <select
+                      value={selectedClassId}
+                      onChange={(e) => {
+                        const newClassId = e.target.value;
+                        setSelectedClassId(newClassId);
+                        setStudentsPage(1);
+                        if (newClassId && newClassId !== 'all') {
+                          setSingleStudentClassId(newClassId);
+                          setExcelClassId(newClassId);
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="all">👥 Tất cả các lớp ({availableClassesForSchool.length} lớp)</option>
+                      {availableClassesForSchool.map((c) => {
+                        const count = students.filter((s) => s.classId === c.id).length;
+                        return (
                           <option key={c.id} value={c.id}>
-                            {c.name} ({c.code})
+                            Lớp {c.name} ({c.code}) • {count} học sinh
                           </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {(() => {
-                    const curClass = assignedClasses.find((c) => c.id === selectedClassId);
-                    const curSchool = schools.find((s) => s.id === curClass?.schoolId);
-                    if (curSchool) {
-                      return (
-                        <div className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-indigo-700">
-                          <SchoolIcon className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                          <span className="truncate">Thuộc trường: {curSchool.name}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
+                        );
+                      })}
+                    </select>
+                  </div>
+
+                  {/* Dropdown 3: Lọc Theo Đề Thi */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Lọc Theo Đề Thi</span>
+                    </label>
+                    <select
+                      value={selectedExamFilter}
+                      onChange={(e) => {
+                        setSelectedExamFilter(e.target.value);
+                        setStudentsPage(1);
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-slate-50/70 hover:bg-white text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all cursor-pointer shadow-2xs"
+                    >
+                      <option value="all">📝 -- Tất cả đề thi ({teacherExams.length} đề) --</option>
+                      {teacherExams.map((ex) => (
+                        <option key={ex.id} value={ex.id}>
+                          📝 {ex.title} {ex.isPracticeTest ? '(Luyện tập)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                      Chọn Ngày Thống Kê Bài Thi
-                    </label>
-                    <div className="flex items-center gap-1">
+                {/* Sub-bar: Bộ lọc Ngày Thống Kê & Trạng Thái */}
+                <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Ngày thống kê:</span>
+                    </span>
+
+                    <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl">
                       <button
                         type="button"
                         onClick={() => setSelectedStatsDate(todayDateStr)}
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                           selectedStatsDate === todayDateStr
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            ? 'bg-white text-indigo-700 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         Hôm nay
@@ -1452,130 +1533,300 @@ NOTIFY pgrst, 'reload schema';`;
                       <button
                         type="button"
                         onClick={() => setSelectedStatsDate(yesterdayDateStr)}
-                        className={`text-[10px] font-bold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                           selectedStatsDate === yesterdayDateStr
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                            ? 'bg-white text-indigo-700 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
                         }`}
                       >
                         Hôm qua
                       </button>
-                      {selectedStatsDate && (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedStatsDate('')}
-                          className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 cursor-pointer"
-                        >
-                          Tất cả
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedStatsDate('')}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          !selectedStatsDate
+                            ? 'bg-white text-indigo-700 shadow-2xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        Tất cả các ngày
+                      </button>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-1.5">
+
                     <input
                       type="date"
                       value={selectedStatsDate}
                       onChange={(e) => setSelectedStatsDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                      className="px-2.5 py-1 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <span className="text-slate-500 text-xs">
+                      Đang hiển thị: <strong className="text-slate-900 font-bold">{filteredStudents.length}</strong> học sinh
+                      {selectedClassId !== 'all' && (
+                        <span> thuộc <strong className="text-indigo-600 font-bold">{assignedClasses.find((c) => c.id === selectedClassId)?.name}</strong></span>
+                      )}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowClassOverviewDrawer(!showClassOverviewDrawer)}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <Layers className="w-3.5 h-3.5" />
+                      <span>{showClassOverviewDrawer ? 'Ẩn cơ sở trường' : 'Xem cơ sở trường & GVCN'}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* DRAWER MỞ RỘNG: XEM THÔNG TIN CƠ SỞ TRƯỜNG & PHÒNG HỌC / GVCN */}
+              {showClassOverviewDrawer && (
+                <div className="bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-slate-50 p-5 rounded-3xl border border-indigo-100 shadow-2xs space-y-3 animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-sm text-indigo-950 flex items-center gap-2">
+                      <SchoolIcon className="w-4 h-4 text-indigo-600" />
+                      <span>Danh Sách Trường Học & Phân Bổ Các Lớp Phụ Trách</span>
+                    </h4>
+                    <span className="text-[11px] font-bold text-indigo-700 bg-white px-2.5 py-1 rounded-full border border-indigo-200">
+                      {teacherSchools.length} trường • {assignedClasses.length} lớp
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {teacherSchools.map((ts, idx) => (
+                      <div
+                        key={ts.schoolId}
+                        className={`p-3.5 rounded-2xl border transition-all ${
+                          selectedSchoolId === ts.schoolId
+                            ? 'bg-white border-indigo-500 ring-2 ring-indigo-200 shadow-xs'
+                            : 'bg-white/80 border-slate-200 hover:bg-white hover:border-indigo-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5 truncate">
+                            <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-mono text-[10px] flex items-center justify-center font-bold shrink-0">
+                              {idx + 1}
+                            </span>
+                            <span className="truncate">{ts.schoolName}</span>
+                          </span>
+                          <span className="text-[10px] font-bold text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded-full shrink-0">
+                            {ts.classes.length} lớp
+                          </span>
+                        </div>
+
+                        <div className="mt-2.5 space-y-1.5">
+                          <div className="text-[11px] text-slate-500">
+                            Sĩ số: <strong className="text-emerald-700 font-bold">{ts.studentCount} học sinh</strong>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {ts.classes.map((cls) => (
+                              <button
+                                key={cls.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSchoolId(ts.schoolId);
+                                  setSelectedClassId(cls.id);
+                                  setStudentsPage(1);
+                                }}
+                                className={`px-2 py-0.5 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
+                                  selectedClassId === cls.id
+                                    ? 'bg-indigo-600 text-white shadow-2xs'
+                                    : 'bg-slate-100 hover:bg-indigo-100 text-slate-700'
+                                }`}
+                              >
+                                {cls.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* KHU VỰC THAO TÁC (ACTION BUTTONS - ĐẶT PHÍA TRÊN BẢNG, BÊN PHẢI) */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs">
+                {/* Tiêu đề & Ô tìm kiếm nhanh */}
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                      <Users className="w-4 h-4" />
+                    </span>
+                    <h4 className="text-sm font-bold text-slate-900">
+                      Danh Sách Học Sinh ({filteredStudents.length})
+                    </h4>
+                  </div>
+
+                  {/* Thanh tìm kiếm trực tiếp trong bảng */}
+                  <div className="relative min-w-[200px] sm:min-w-[260px]">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      placeholder="Tìm kiếm họ tên, SBD, username..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 placeholder:text-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                    Lọc Theo Đề Thi
-                  </label>
-                  <select
-                    value={selectedExamFilter}
-                    onChange={(e) => setSelectedExamFilter(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold focus:ring-2 focus:ring-indigo-500"
+                {/* 2 Nút Thao tác nổi bật */}
+                <div className="flex items-center gap-2.5 self-end sm:self-auto shrink-0">
+                  {/* Nút 1: Thêm học sinh (Thêm đơn lẻ) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedClassId && selectedClassId !== 'all') {
+                        setSingleStudentClassId(selectedClassId);
+                      }
+                      setIsAddSingleStudentModalOpen(true);
+                    }}
+                    disabled={assignedClasses.length === 0}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                    title="Thêm từng học sinh đơn lẻ vào lớp đang chọn"
                   >
-                    <option value="all">-- Tất cả đề thi --</option>
-                    {teacherExams.map((ex) => (
-                      <option key={ex.id} value={ex.id}>
-                        {ex.title}
-                      </option>
-                    ))}
-                  </select>
+                    <Plus className="w-4 h-4" />
+                    <span>Thêm Học Sinh</span>
+                  </button>
+
+                  {/* Nút 2: Thêm bằng File Excel (Có icon Excel dễ nhận diện) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedClassId && selectedClassId !== 'all') {
+                        setExcelClassId(selectedClassId);
+                      }
+                      setIsAddExcelModalOpen(true);
+                    }}
+                    disabled={assignedClasses.length === 0}
+                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 text-white text-xs font-bold shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
+                    title="Nhập danh sách học sinh hàng loạt từ bảng tính Excel / CSV"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-100" />
+                    <span>Thêm Bằng File Excel</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Bảng Danh Sách Học Sinh */}
+              {/* KHU VỰC BẢNG DỮ LIỆU (DATA TABLE - CHIẾM PHẦN LỚN DIỆN TÍCH) */}
               <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[11px] tracking-wider">
                       <tr>
                         <th className="py-3.5 px-4 text-center w-12">STT</th>
-                        <th className="py-3.5 px-4">Họ & Tên Học Sinh</th>
-                        <th className="py-3.5 px-3">Mã HS / SBD</th>
-                        <th className="py-3.5 px-3">Tài Khoản (Tự sinh)</th>
+                        <th className="py-3.5 px-4">Họ và Tên</th>
+                        <th className="py-3.5 px-3">Tên Đăng Nhập</th>
                         <th className="py-3.5 px-3">Mật Khẩu</th>
                         <th className="py-3.5 px-4 text-center">
                           Điểm Cao Nhất {selectedStatsDate && `(${selectedStatsDate})`}
                         </th>
                         <th className="py-3.5 px-4 text-center">
-                          Số Lần Làm {selectedStatsDate ? `(Ngày ${selectedStatsDate})` : '(Tổng)'}
+                          Số Lần Làm {selectedStatsDate ? `(Ngày ${selectedStatsDate})` : '(Theo Ngày)'}
                         </th>
-                        <th className="py-3.5 px-4 text-center">Thao Tác</th>
+                        <th className="py-3.5 px-4 text-center w-28">Thao Tác</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {paginatedStudents.map((st, idx) => {
                         const stats = getStudentExamStats(st.id, selectedExamFilter);
                         const isPassed = stats.highestScore >= 950;
+                        const studentClass = assignedClasses.find((c) => c.id === st.classId);
 
                         return (
                           <tr key={st.id} className="hover:bg-slate-50/80 transition-colors">
+                            {/* Cột 1: STT */}
                             <td className="py-3.5 px-4 text-center font-mono font-bold text-slate-400">
                               {(currentStudentsPage - 1) * 10 + idx + 1}
                             </td>
+
+                            {/* Cột 2: Họ và Tên */}
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-slate-900 text-sm">{st.fullName}</div>
-                              <div className="text-[11px] text-slate-400 font-mono">
-                                {st.note || `Email: ${st.username}@thientch.edu.vn`}
+                              <div className="flex items-center gap-1.5 mt-0.5">
+                                {studentClass && (
+                                  <span className="px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                                    {studentClass.name}
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-slate-400 font-mono">
+                                  SBD: <strong className="text-slate-600 font-bold">{st.studentCode}</strong>
+                                </span>
                               </div>
                             </td>
-                            <td className="py-3.5 px-3 font-mono font-bold text-indigo-700">
-                              {st.studentCode}
+
+                            {/* Cột 3: Tên Đăng Nhập */}
+                            <td className="py-3.5 px-3">
+                              <span className="font-mono text-indigo-700 font-semibold bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-md inline-block">
+                                @{st.username}
+                              </span>
                             </td>
-                            <td className="py-3.5 px-3 font-mono text-slate-700">
-                              @{st.username}
+
+                            {/* Cột 4: Mật Khẩu */}
+                            <td className="py-3.5 px-3">
+                              <span className="font-mono text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md inline-block">
+                                {st.password || '123@456'}
+                              </span>
                             </td>
-                            <td className="py-3.5 px-3 font-mono text-slate-500">
-                              {st.password || '123@456'}
-                            </td>
+
+                            {/* Cột 5: Điểm Cao Nhất */}
                             <td className="py-3.5 px-4 text-center">
                               {stats.attemptCount > 0 ? (
-                                <span
-                                  className={`inline-block px-2.5 py-1 rounded-full font-mono font-black text-xs ${
-                                    isPassed
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : 'bg-red-100 text-red-800'
-                                  }`}
-                                >
-                                  {stats.highestScore} / 1000đ
-                                </span>
+                                <div className="flex flex-col items-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full font-mono font-black text-xs ${
+                                      isPassed
+                                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                        : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    }`}
+                                  >
+                                    {isPassed && '★'} {stats.highestScore} / 1000đ
+                                  </span>
+                                  <span className="text-[10px] font-bold text-slate-400 mt-0.5">
+                                    {isPassed ? 'ĐẠT (≥950)' : 'Chưa Đạt'}
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-slate-400 text-xs italic">Chưa thi</span>
                               )}
                             </td>
+
+                            {/* Cột 6: Số Lần Làm (Theo Ngày) - Thẻ link / Button mở Modal chi tiết */}
                             <td className="py-3.5 px-4 text-center">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setStudentToViewResults(st);
-                                  setStudentModalDateFilter(selectedStatsDate);
-                                }}
-                                className={`px-2.5 py-1 rounded-xl text-xs font-bold cursor-pointer transition-colors ${
-                                  stats.attemptCount > 0
-                                    ? 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                                    : 'bg-slate-100 text-slate-400'
-                                }`}
-                              >
-                                {stats.attemptCount} lần {stats.attemptCount > 0 && '➔ Xem'}
-                              </button>
+                              {stats.attemptCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentToViewResults(st);
+                                    setStudentModalDateFilter(selectedStatsDate);
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                                  title="Bấm để xem danh sách chi tiết các lần làm bài thi của học sinh này"
+                                >
+                                  <span className="font-mono text-sm font-black text-indigo-800">{stats.attemptCount}</span>
+                                  <span className="text-[11px] font-semibold text-indigo-600">lần làm</span>
+                                  <span className="text-indigo-400 group-hover:text-indigo-700 group-hover:translate-x-0.5 transition-transform text-xs">➔ Xem</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentToViewResults(st);
+                                    setStudentModalDateFilter(selectedStatsDate);
+                                  }}
+                                  className="inline-flex items-center px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-400 text-xs font-mono transition-colors cursor-pointer"
+                                  title="Chưa có bài thi nào - Bấm để tra cứu chi tiết"
+                                >
+                                  0 lần
+                                </button>
+                              )}
                             </td>
+
+                            {/* Cột 7: Thao Tác */}
                             <td className="py-3.5 px-4 text-center">
                               <div className="flex items-center justify-center gap-1">
                                 <button
@@ -1584,15 +1835,15 @@ NOTIFY pgrst, 'reload schema';`;
                                     setStudentToViewResults(st);
                                     setStudentModalDateFilter(selectedStatsDate);
                                   }}
-                                  className="w-8 h-8 rounded-lg text-indigo-600 hover:bg-indigo-50 flex items-center justify-center transition-colors cursor-pointer"
-                                  title="Xem danh sách bài thi đã làm của học sinh"
+                                  className="p-1.5 rounded-xl text-indigo-600 hover:bg-indigo-50 border border-transparent hover:border-indigo-200 transition-all cursor-pointer"
+                                  title="Xem chi tiết lịch sử thi & bài làm của học sinh"
                                 >
                                   <Eye className="w-4 h-4" />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setStudentToDelete(st)}
-                                  className="w-8 h-8 rounded-lg text-red-600 hover:bg-red-50 flex items-center justify-center transition-colors cursor-pointer"
+                                  className="p-1.5 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
                                   title="Xóa học sinh khỏi lớp"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -1605,14 +1856,22 @@ NOTIFY pgrst, 'reload schema';`;
 
                       {filteredStudents.length === 0 && (
                         <tr>
-                          <td colSpan={8} className="py-12 text-center text-slate-400 text-xs">
-                            Không tìm thấy học sinh nào trong lớp này.
+                          <td colSpan={7} className="py-16 text-center text-slate-400 space-y-3">
+                            <Users className="w-10 h-10 text-slate-300 mx-auto" />
+                            <div className="text-sm font-semibold text-slate-600">
+                              Không tìm thấy học sinh nào phù hợp với bộ lọc hiện tại.
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              Hãy thử chọn lớp học khác hoặc bấm <strong>"Thêm Học Sinh"</strong> để thêm vào lớp này.
+                            </div>
                           </td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Phân trang bảng học sinh */}
                 <Pagination
                   currentPage={currentStudentsPage}
                   totalItems={filteredStudents.length}
@@ -2861,398 +3120,6 @@ NOTIFY pgrst, 'reload schema';`;
                   />
                 </div>
               )}
-            </div>
-          )}
-
-          {/* ================= TAB 4: PHÂN LỚP THEO TRƯỜNG ĐƯỢC PHÂN CÔNG ================= */}
-          {activeTab === 'classes' && (
-            <div className="space-y-6 animate-in fade-in">
-              {/* Header Box */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
-                      <SchoolIcon className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                        <span>Phân Lớp Theo Trường Được Phân Công</span>
-                        <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 font-bold font-mono">
-                          {assignedClasses.length} lớp học
-                        </span>
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Tài khoản giáo viên được phân công giảng dạy tại <strong>{teacherSchools.length} trường</strong>. Các lớp học được phân chia và hiển thị chi tiết theo từng cơ sở trường học.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* KPI Badges */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-bold flex items-center gap-1.5">
-                    <SchoolIcon className="w-4 h-4 text-purple-600" />
-                    <span>{teacherSchools.length} Trường Phụ Trách</span>
-                  </div>
-                  <div className="px-3 py-1.5 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-xs font-bold flex items-center gap-1.5">
-                    <BookOpen className="w-4 h-4 text-indigo-600" />
-                    <span>{assignedClasses.length} Lớp Giảng Dạy</span>
-                  </div>
-                  <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-1.5">
-                    <Users className="w-4 h-4 text-emerald-600" />
-                    <span>{assignedStudents.length} Học Sinh</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Bảng phân công chi tiết theo từng trường (Executive Breakdown) */}
-              {teacherSchools.length > 0 && (
-                <div className="bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-slate-50 p-4 rounded-2xl border border-indigo-100 shadow-2xs">
-                  <div className="text-xs font-bold text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-2.5">
-                    <div className="flex items-center gap-1.5">
-                      <SchoolIcon className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <span>Danh Sách Trường Được Phân Công & Các Lớp Giảng Dạy:</span>
-                    </div>
-                    <span className="text-[11px] text-indigo-700 font-semibold font-mono">
-                      (Bấm vào từng trường để lọc nhanh)
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {teacherSchools.map((ts, idx) => {
-                      const isSelected = schoolFilterForClasses === ts.schoolId;
-                      return (
-                        <div
-                          key={ts.schoolId}
-                          onClick={() => setSchoolFilterForClasses(isSelected ? 'all' : ts.schoolId)}
-                          className={`p-3.5 rounded-xl border transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-white border-indigo-500 shadow-xs ring-2 ring-indigo-200'
-                              : 'bg-white/80 border-slate-200 hover:border-indigo-300 hover:bg-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-extrabold text-xs text-slate-900 flex items-center gap-1.5">
-                              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white font-mono text-[11px] flex items-center justify-center font-bold shrink-0">
-                                {idx + 1}
-                              </span>
-                              <span className="truncate">{ts.schoolName}</span>
-                            </span>
-                            <span className="text-[11px] font-bold text-indigo-700 font-mono bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 shrink-0">
-                              {ts.classes.length} lớp
-                            </span>
-                          </div>
-
-                          <div className="mt-2 pl-6 flex flex-wrap items-center gap-1.5">
-                            <span className="text-slate-500 text-[11px] font-medium">Lớp:</span>
-                            {ts.classes.length > 0 ? (
-                              ts.classes.map((cls) => (
-                                <span
-                                  key={cls.id}
-                                  className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200"
-                                >
-                                  {cls.name}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-slate-400 italic text-[11px]">Toàn bộ các lớp của trường</span>
-                            )}
-                            <span className="ml-auto text-[11px] text-emerald-700 font-semibold shrink-0">
-                              ({ts.studentCount} HS)
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Filter Bar: Tìm kiếm lớp & Tabs chọn trường */}
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-                  {/* Search class input */}
-                  <div className="w-full sm:w-80 relative">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      value={classSearchInClassesTab}
-                      onChange={(e) => setClassSearchInClassesTab(e.target.value)}
-                      placeholder="Tìm theo tên lớp, mã lớp, khối..."
-                      className="w-full pl-9 pr-8 py-2 text-xs font-semibold rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500"
-                    />
-                    {classSearchInClassesTab && (
-                      <button
-                        type="button"
-                        onClick={() => setClassSearchInClassesTab('')}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <span className="text-xs text-slate-500 font-medium self-start sm:self-auto">
-                    Hiển thị danh sách lớp nhóm theo từng trường
-                  </span>
-                </div>
-
-                {/* School Filter Tabs */}
-                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setSchoolFilterForClasses('all')}
-                    className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                      schoolFilterForClasses === 'all'
-                        ? 'bg-indigo-600 text-white shadow-xs'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                    }`}
-                  >
-                    <span>Tất Cả Các Trường</span>
-                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                      schoolFilterForClasses === 'all' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                    }`}>
-                      {assignedClasses.length}
-                    </span>
-                  </button>
-
-                  {teacherSchools.map((ts) => {
-                    const isSelected = schoolFilterForClasses === ts.schoolId;
-                    return (
-                      <button
-                        key={ts.schoolId}
-                        type="button"
-                        onClick={() => setSchoolFilterForClasses(ts.schoolId)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white shadow-xs'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                      >
-                        <SchoolIcon className="w-3.5 h-3.5" />
-                        <span className="max-w-[200px] truncate">{ts.schoolName}</span>
-                        <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
-                        }`}>
-                          {ts.classes.length} lớp
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Danh Sách Trường và Lớp Phân Bổ */}
-              <div className="space-y-6">
-                {teacherSchools
-                  .filter((ts) => schoolFilterForClasses === 'all' || ts.schoolId === schoolFilterForClasses)
-                  .map((ts, schoolIdx) => {
-                    // Lọc lớp theo từ khóa tìm kiếm nếu có
-                    const filteredClassesInSchool = ts.classes.filter((c) => {
-                      if (!classSearchInClassesTab.trim()) return true;
-                      const q = classSearchInClassesTab.toLowerCase();
-                      return (
-                        c.name.toLowerCase().includes(q) ||
-                        c.code.toLowerCase().includes(q) ||
-                        (c.grade && c.grade.toLowerCase().includes(q))
-                      );
-                    });
-
-                    if (classSearchInClassesTab.trim() && filteredClassesInSchool.length === 0) {
-                      return null;
-                    }
-
-                    return (
-                      <div
-                        key={ts.schoolId}
-                        className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden transition-all"
-                      >
-                        {/* School Section Banner */}
-                        <div className="p-5 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-white border-b border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                          <div className="flex items-start gap-3">
-                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white flex items-center justify-center font-bold text-sm shadow-xs shrink-0 mt-0.5">
-                              <SchoolIcon className="w-5 h-5" />
-                            </div>
-                            <div>
-                              <div className="flex flex-wrap items-center gap-2">
-                                <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
-                                  #{schoolIdx + 1}
-                                </span>
-                                <h4 className="text-base font-extrabold text-slate-900 tracking-tight">
-                                  {ts.schoolName}
-                                </h4>
-                                {ts.schoolCode && (
-                                  <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                                    {ts.schoolCode}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 mt-1">
-                                {ts.school?.address && (
-                                  <span>Địa chỉ: <strong className="text-slate-700">{ts.school.address}</strong></span>
-                                )}
-                                {ts.school?.phone && (
-                                  <span>SĐT: <strong className="text-slate-700">{ts.school.phone}</strong></span>
-                                )}
-                                <span>Phân công giảng dạy: <strong className="text-indigo-700">{ts.classes.length} lớp ({ts.classes.map(c => c.name).join(', ')})</strong></span>
-                                <span>Tổng sĩ số: <strong className="text-emerald-700">{ts.studentCount} học sinh</strong></span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Quick School Actions */}
-                          <div className="flex items-center gap-2 self-start md:self-auto shrink-0">
-                            {ts.classes.length > 0 && (
-                              <>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSelectedClassId(ts.classes[0].id);
-                                    setActiveTab('students');
-                                  }}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer"
-                                >
-                                  <Users className="w-3.5 h-3.5" />
-                                  <span>Xem học sinh trường này</span>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSingleStudentClassId(ts.classes[0].id);
-                                    setIsAddSingleStudentModalOpen(true);
-                                  }}
-                                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all flex items-center gap-1 cursor-pointer shadow-xs"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  <span>Thêm HS</span>
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Classes Grid for this School */}
-                        <div className="p-5 bg-slate-50/40">
-                          {filteredClassesInSchool.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {filteredClassesInSchool.map((cls) => {
-                                const classStudentCount = students.filter((s) => s.classId === cls.id).length;
-                                return (
-                                  <div
-                                    key={cls.id}
-                                    className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs hover:shadow-md hover:border-indigo-300 transition-all space-y-3 group"
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span className="px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-100">
-                                        {cls.code}
-                                      </span>
-                                      <span className="text-[11px] text-slate-400 font-mono">
-                                        NK: {cls.schoolYear}
-                                      </span>
-                                    </div>
-
-                                    <div>
-                                      <h5 className="font-extrabold text-base text-slate-900 group-hover:text-indigo-600 transition-colors">
-                                        {cls.name}
-                                      </h5>
-                                      <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 mt-0.5">
-                                        <SchoolIcon className="w-3 h-3 text-slate-400" />
-                                        <span className="truncate">{ts.schoolName}</span>
-                                      </span>
-                                    </div>
-
-                                    <div className="text-xs text-slate-600 space-y-1 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Khối lớp:</span>
-                                        <strong>{cls.grade}</strong>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Phòng học:</span>
-                                        <strong className="truncate max-w-[140px]">{cls.room || 'Phòng học chuyên đề'}</strong>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Giáo viên CN:</span>
-                                        <strong className="truncate max-w-[140px]">{cls.homeroomTeacher || 'Chưa phân công'}</strong>
-                                      </div>
-                                      <div className="flex justify-between pt-1 border-t border-slate-200/60">
-                                        <span className="text-slate-500 font-medium">Sĩ số học sinh:</span>
-                                        <strong className="text-indigo-600 font-bold">{classStudentCount} học sinh</strong>
-                                      </div>
-                                    </div>
-
-                                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2">
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setSelectedClassId(cls.id);
-                                          setActiveTab('students');
-                                        }}
-                                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer flex items-center gap-1"
-                                      >
-                                        <span>Danh sách học sinh</span>
-                                        <span>➔</span>
-                                      </button>
-
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setSingleStudentClassId(cls.id);
-                                            setIsAddSingleStudentModalOpen(true);
-                                          }}
-                                          className="p-1.5 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                                          title="Thêm 1 học sinh vào lớp này"
-                                        >
-                                          <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => {
-                                            setExcelClassId(cls.id);
-                                            setIsAddExcelModalOpen(true);
-                                          }}
-                                          className="p-1.5 rounded-lg text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer"
-                                          title="Nhập danh sách học sinh bằng Excel"
-                                        >
-                                          <FileSpreadsheet className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="py-6 text-center text-slate-400 text-xs">
-                              Không tìm thấy lớp học nào thuộc trường này phù hợp với từ khóa "{classSearchInClassesTab}".
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                {/* Khi không có trường nào phù hợp */}
-                {teacherSchools.filter((ts) => schoolFilterForClasses === 'all' || ts.schoolId === schoolFilterForClasses).length === 0 && (
-                  <div className="bg-white p-12 rounded-3xl border border-slate-200 text-center space-y-3">
-                    <SchoolIcon className="w-12 h-12 text-slate-300 mx-auto" />
-                    <h4 className="font-bold text-base text-slate-700">Không tìm thấy lớp học nào</h4>
-                    <p className="text-xs text-slate-500">
-                      Hãy thử đổi từ khóa tìm kiếm hoặc chọn "Tất Cả Các Trường".
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSchoolFilterForClasses('all');
-                        setClassSearchInClassesTab('');
-                      }}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors cursor-pointer"
-                    >
-                      Đặt Lại Bộ Lọc
-                    </button>
-                  </div>
-                )}
-              </div>
             </div>
           )}
         </main>
