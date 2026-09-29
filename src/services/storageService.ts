@@ -43,26 +43,26 @@ export function getGitHubConfig(): {
   } catch {}
 
   const envToken = (
-    (typeof process !== 'undefined' && process.env?.GITHUB_TOKEN) ||
-    import.meta.env.VITE_GITHUB_TOKEN ||
+    (typeof process !== 'undefined' && (process.env?.GITHUB_TOKEN || (process.env as any)?.GITHUP_TOKEN)) ||
+    (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GITHUB_TOKEN || (import.meta.env as any)?.VITE_GITHUP_TOKEN)) ||
     ''
   ).trim();
 
   const envOwner = (
-    (typeof process !== 'undefined' && process.env?.GITHUB_OWNER) ||
-    import.meta.env.VITE_GITHUB_OWNER ||
+    (typeof process !== 'undefined' && (process.env?.GITHUB_OWNER || (process.env as any)?.GITHUP_OWNER)) ||
+    (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GITHUB_OWNER || (import.meta.env as any)?.VITE_GITHUP_OWNER)) ||
     ''
   ).trim();
 
   const envRepo = (
-    (typeof process !== 'undefined' && process.env?.GITHUB_REPO) ||
-    import.meta.env.VITE_GITHUB_REPO ||
+    (typeof process !== 'undefined' && (process.env?.GITHUB_REPO || (process.env as any)?.GITHUP_REPO)) ||
+    (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GITHUB_REPO || (import.meta.env as any)?.VITE_GITHUP_REPO)) ||
     ''
   ).trim();
 
   const envBranch = (
-    (typeof process !== 'undefined' && process.env?.GITHUB_BRANCH) ||
-    import.meta.env.VITE_GITHUB_BRANCH ||
+    (typeof process !== 'undefined' && (process.env?.GITHUB_BRANCH || (process.env as any)?.GITHUP_BRANCH)) ||
+    (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GITHUB_BRANCH || (import.meta.env as any)?.VITE_GITHUP_BRANCH)) ||
     'main'
   ).trim();
 

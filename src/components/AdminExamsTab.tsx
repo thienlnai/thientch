@@ -1651,7 +1651,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
               {/* Header trường và đề */}
               <div className="flex items-start justify-between border-b-2 border-slate-900 pb-4">
                 <div className="text-left text-xs uppercase font-sans">
-                  <p className="font-bold">HỆ THỐNG KHẢO THÍ TRỰC TUYẾN THIENTCH</p>
+                  <p className="font-bold">HỆ THỐNG KHẢO THÍ TRỰC TUYẾN THIEN<span className="text-[#EF4444] font-black">TECH</span></p>
                   <p>BAN QUẢN TRỊ & ĐÀO TẠO KHẢO THÍ IT</p>
                 </div>
                 <div className="text-right text-xs uppercase font-sans">

@@ -120,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="mt-2.5 px-2 flex items-center justify-between text-[10px] text-slate-400 font-mono">
-          <span>THIENTCH :: SECURE</span>
+          <span>THIEN<span className="text-[#EF4444] font-bold">TECH</span> :: SECURE</span>
           <span className="flex items-center gap-1.5 text-[#10B981] font-semibold">
             <span className="w-1.5 h-1.5 rounded-full bg-[#10B981] animate-ping" />
             ONLINE

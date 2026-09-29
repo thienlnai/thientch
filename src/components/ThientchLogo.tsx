@@ -160,7 +160,7 @@ export const ThientchLogo: React.FC<ThientchLogoProps> = ({
                 variant === 'dark' ? 'text-white' : 'text-slate-950'
               }`}
             >
-              THIEN<span className="text-[#0066FF]">TCH</span>
+              THIEN<span className="text-[#EF4444] font-black">TECH</span>
             </span>
             <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-[#00FF88] border border-emerald-500/30">
               IT::EXAM

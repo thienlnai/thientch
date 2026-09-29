@@ -12,6 +12,7 @@ import {
 } from '../utils/studentHelper.ts';
 import { autoSaveExamDraft } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
+import { ThientchLogo } from './ThientchLogo.tsx';
 import { 
   Clock, 
   AlertTriangle, 
@@ -993,6 +994,11 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   : 'bg-gradient-to-r from-amber-600 to-red-600'
               }`}
             >
+              <div className="mb-2 flex items-center justify-center">
+                <span className="px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-[11px] font-mono font-bold tracking-wider">
+                  THIEN<span className="text-[#EF4444] font-black">TECH</span> :: KHẢO THÍ SỐ
+                </span>
+              </div>
               <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center mx-auto mb-3">
                 <Award className="w-9 h-9 text-white" />
               </div>
@@ -1077,6 +1083,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       {/* ================= THANH TIÊU ĐỀ PHÒNG THI (MÀU TRẮNG, NỔI BẬT THÔNG TIN) ================= */}
       <header className="h-18 px-4 sm:px-6 bg-white border-b border-slate-200 shadow-xs flex items-center justify-between shrink-0 z-10">
         <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <ThientchLogo
+            size="sm"
+            variant="light"
+            subtitle="Phòng Thi Chuẩn Hóa"
+            className="hidden lg:flex shrink-0 pr-2 border-r border-slate-200"
+          />
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-700 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0 tracking-wider">
             IT
           </div>

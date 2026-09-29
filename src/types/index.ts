@@ -240,7 +240,7 @@ export type Language = 'vi' | 'en';
 
 export const TRANSLATIONS = {
   vi: {
-    brandName: 'THIENTCH',
+    brandName: 'THIENTECH',
     systemTitle: 'HỆ THỐNG KIỂM TRA TRỰC TUYẾN CÔNG NGHỆ THÔNG TIN',
     systemSubtitle: 'Nền tảng thi trắc nghiệm lập trình & khảo thí công nghệ thông tin an toàn, đồng bộ thời gian thực và chống gian lận đa tầng.',
     schoolPortal: 'Cổng Khảo Thí Công Nghệ Thông Tin Chuẩn Hóa',
@@ -272,7 +272,7 @@ export const TRANSLATIONS = {
     liveSyncConnected: 'Turso Database (SQLite): Đồng bộ thời gian thực',
   },
   en: {
-    brandName: 'THIENTCH',
+    brandName: 'THIENTECH',
     systemTitle: 'INFORMATION TECHNOLOGY ONLINE EXAMINATION SYSTEM',
     systemSubtitle: 'Secure online IT examination platform with real-time sync, standardized question banks, and multi-layer proctoring.',
     schoolPortal: 'Standardized IT Testing Portal',

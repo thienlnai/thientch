@@ -155,7 +155,7 @@ export const TopBar: React.FC<TopBarProps> = ({
               </span>
             )}
             <span className="text-xs text-slate-400 font-medium hidden md:inline">
-              THIENTCH IT Assessment Platform
+              THIEN<span className="text-[#EF4444] font-bold">TECH</span> IT Assessment Platform
             </span>
           </div>
         )}

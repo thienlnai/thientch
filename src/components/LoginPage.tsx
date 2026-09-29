@@ -579,7 +579,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 </div>
                 <div className="text-xs leading-relaxed flex-1">
                   <span className="font-bold text-white block mb-0.5">
-                    {lang === 'vi' ? 'Hệ thống Khảo thí Tập trung THIENTCH' : 'THIENTCH Centralized Examination System'}
+                    {lang === 'vi' ? (
+                      <>Hệ thống Khảo thí Tập trung THIEN<span className="text-[#EF4444] font-black">TECH</span></>
+                    ) : (
+                      <>THIEN<span className="text-[#EF4444] font-black">TECH</span> Centralized Examination System</>
+                    )}
                   </span>
                   <p className="text-slate-400">
                     {t.noticeProvidedAccount}
@@ -591,7 +595,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <div className="pt-2 text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5 font-mono">
                 <ShieldCheck className="w-3.5 h-3.5 text-[#00FF88]" />
                 <span>
-                  {lang === 'vi' ? 'THIENTCH: Hệ thống kiểm tra bảo mật cao — Không mở đăng ký tự do' : 'THIENTCH: High-security internal access — Self-registration disabled'}
+                  {lang === 'vi' ? (
+                    <>THIEN<span className="text-[#EF4444] font-bold">TECH</span>: Hệ thống kiểm tra bảo mật cao — Không mở đăng ký tự do</>
+                  ) : (
+                    <>THIEN<span className="text-[#EF4444] font-bold">TECH</span>: High-security internal access — Self-registration disabled</>
+                  )}
                 </span>
               </div>
 
@@ -604,7 +612,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       {/* Global Footer */}
       <footer className="w-full max-w-7xl mx-auto py-4 px-4 sm:px-8 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2 border-t border-slate-800/80 mt-2 z-10">
         <p className="font-medium text-slate-400">
-          © 2026 <strong className="text-white">THIENTCH</strong> — {t.systemTitle}.
+          © 2026 <strong className="text-white">THIEN<span className="text-[#EF4444] font-black">TECH</span></strong> — {t.systemTitle}.
         </p>
         <div className="flex items-center gap-2 text-[11px] text-slate-400 font-mono">
           <span>{lang === 'vi' ? 'Khảo thí số chuẩn hóa' : 'Standardized Digital Assessment'}</span>
