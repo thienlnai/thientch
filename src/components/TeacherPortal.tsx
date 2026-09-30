@@ -69,6 +69,7 @@ import {
   deleteMultipleExamSubmissions,
   deleteStudentSubmissions,
   refreshSubmissionsNow,
+  checkForNewSubmissions,
   onMissingQuestionsColumn,
   syncAllExamQuestionsToSupabase,
   splitAndMigrateExamQuestionsToSeparateTable
@@ -243,15 +244,30 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [isRefreshingSubs, setIsRefreshingSubs] = useState(false);
   const [lastSubRefreshTime, setLastSubRefreshTime] = useState<string>('Vừa xong');
 
-  // Tự động làm mới và đồng bộ danh sách bài nộp khi giáo viên mở tab Khảo thí & Chấm thi
+  // Tự động làm mới và kiểm tra bài nộp mới siêu nhẹ (chỉ tốn đúng 1 Row Read) mỗi 20s khi giáo viên theo dõi
   useEffect(() => {
-    if (activeTab === 'grading') {
-      refreshSubmissionsNow()
-        .then(() => {
-          setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+    if (activeTab !== 'classes' && activeTab !== 'grading') return;
+
+    refreshSubmissionsNow()
+      .then(() => {
+        setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+      })
+      .catch(() => {});
+
+    // Bộ đếm kiểm tra bài nộp mới (chỉ 1 row read duy nhất mỗi chu kỳ)
+    const intervalTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      checkForNewSubmissions()
+        .then((hasNew) => {
+          if (hasNew) {
+            setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+            showToast('Hệ thống vừa cập nhật kết quả bài nộp mới của học sinh!', 'success');
+          }
         })
         .catch(() => {});
-    }
+    }, 20000);
+
+    return () => clearInterval(intervalTimer);
   }, [activeTab]);
 
   // Pagination states (10 items per page)
@@ -1601,6 +1617,29 @@ NOTIFY pgrst, 'reload schema';`;
                         <span> thuộc <strong className="text-indigo-600 font-bold">{assignedClasses.find((c) => c.id === selectedClassId)?.name}</strong></span>
                       )}
                     </span>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsRefreshingSubs(true);
+                        try {
+                          await refreshSubmissionsNow(true);
+                          setLastSubRefreshTime(new Date().toLocaleTimeString('vi-VN'));
+                          showToast('Đã làm mới dữ liệu bài nộp mới nhất!', 'success');
+                        } catch {
+                          showToast('Lỗi khi làm mới dữ liệu bài thi', 'error');
+                        } finally {
+                          setIsRefreshingSubs(false);
+                        }
+                      }}
+                      disabled={isRefreshingSubs}
+                      className="px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-60 shadow-2xs"
+                      title={`Bấm để tải ngay kết quả nộp bài mới nhất từ CSDL. Cập nhật lần cuối: ${lastSubRefreshTime}`}
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingSubs ? 'animate-spin text-indigo-600' : ''}`} />
+                      <span>{isRefreshingSubs ? 'Đang tải...' : 'Làm Mới Điểm'}</span>
+                      <span className="text-[10px] text-indigo-500 font-normal hidden sm:inline">({lastSubRefreshTime})</span>
+                    </button>
 
                     <button
                       type="button"

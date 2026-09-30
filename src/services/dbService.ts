@@ -2150,84 +2150,110 @@ export function subscribeExams(onUpdate: (exams: Exam[]) => void) {
 }
 
 /**
- * Đồng bộ dữ liệu bài thi theo thời gian thực 100% trên CSDL Turso:
- * 1. Turso Adaptive Checksum Polling: Quét dấu vân tay siêu nhẹ (COUNT(*) + MAX(submittedAt))
- *    - Chỉ tiêu tốn đúng 1 lượt đọc (Rows Read = 1) mỗi 5 giây.
- *    - Nếu không có bài nộp mới, hệ thống DỪNG LẠI NGAY LẬP TỨC (không đọc dữ liệu bảng).
- *    - Chỉ khi học sinh thực sự nộp bài mới tải chi tiết.
- *    - Tự động tạm dừng hoàn toàn khi giáo viên không nhìn vào tab (document.hidden).
- * 2. Cross-tab BroadcastChannel: Đồng bộ tức thì (0ms) giữa các tab/cửa sổ trên cùng thiết bị.
+ * Biến lưu thời điểm nạp bài thi gần nhất để chống spam truy vấn Turso
+ */
+let lastSubmissionsFetchTimestamp = 0;
+const SUBMISSIONS_FETCH_COOLDOWN_MS = 15000; // Tối thiểu 15 giây giữa các lần cưỡng chế nạp
+
+/**
+ * Đồng bộ danh sách bài thi tối ưu:
+ * - KHÔNG CHẠY POLLING ĐỊNH KỲ (0 lượt đọc thừa).
+ * - Nạp lần đầu nếu bộ nhớ đệm còn rỗng.
+ * - Sử dụng BroadcastChannel để đồng bộ tức thì giữa các tab/cửa sổ (0ms, 0 row reads).
  */
 export function subscribeSubmissions(onUpdate: (submissions: ExamSubmission[]) => void) {
   submissionListeners.add(onUpdate);
   onUpdate([...localSubmissions]);
 
-  let pollingTimer: any = null;
-  let lastKnownTursoCount = -1;
-  let lastKnownTursoLatest = '';
-
-  const fetchTursoSubmissionsOptimized = async () => {
-    // Tạm dừng hoàn toàn khi tab đang ẩn ở background để bảo vệ quota Rows Read
-    if (typeof document !== 'undefined' && document.hidden) return;
-
-    const config = getEffectiveTursoConfig();
-    if (!config.isConfigured && !isConfigured) return;
-
-    try {
-      // BƯỚC 1: Kiểm tra dấu vân tay (COUNT + MAX) - Chỉ tốn đúng 1 row read duy nhất
-      const checkResult = await tursoQuery<{ totalCount: number; maxSubmittedAt: string }>(
-        `SELECT COUNT(*) as totalCount, MAX(submittedAt) as maxSubmittedAt FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%'`
-      );
-
-      const check = checkResult?.[0];
-      const currentCount = Number(check?.totalCount ?? 0);
-      const currentLatest = String(check?.maxSubmittedAt ?? '');
-
-      // Nếu dữ liệu không thay đổi -> DỪNG LẠI NGAY LẬP TỨC (Tiết kiệm 99.9% Rows Read)
-      if (lastKnownTursoCount !== -1 && currentCount === lastKnownTursoCount && currentLatest === lastKnownTursoLatest) {
-        return;
-      }
-
-      lastKnownTursoCount = currentCount;
-      lastKnownTursoLatest = currentLatest;
-
-      // BƯỚC 2: Khi phát hiện bài thi mới nộp, tải toàn bộ danh sách bài thi từ Turso
-      const rows = await tursoQuery(
-        `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC`
-      );
-      if (Array.isArray(rows)) {
-        const remoteSubs = rows.map(normalizeSubmission);
-        const map = new Map<string, ExamSubmission>();
-        remoteSubs.forEach((s) => map.set(s.id, s));
-        localSubmissions.forEach((s) => {
-          if (!map.has(s.id) && !s.id.startsWith('draft_')) {
-            map.set(s.id, s);
-          }
-        });
-        localSubmissions = sortBySubmittedAt(Array.from(map.values()));
-        notifySubmissions();
-      }
-    } catch {
-      // Bỏ qua lỗi kết nối ngầm
-    }
-  };
-
-  // Nạp lần đầu và đặt chu kỳ kiểm tra dấu vân tay siêu nhẹ mỗi 5 giây
-  fetchTursoSubmissionsOptimized();
-  pollingTimer = setInterval(fetchTursoSubmissionsOptimized, 5000);
+  // Chỉ nạp từ Turso 1 lần đầu nếu danh sách local còn rỗng
+  if (localSubmissions.length === 0) {
+    refreshSubmissionsNow().catch(() => {});
+  }
 
   return () => {
     submissionListeners.delete(onUpdate);
-    if (pollingTimer) {
-      clearInterval(pollingTimer);
-    }
   };
 }
 
 /**
- * Hàm cưỡng chế nạp và đồng bộ tức thì tất cả bài thi từ CSDL Turso
+ * Lấy danh sách bài thi của riêng 1 học sinh (Chỉ đọc đúng số bài của học sinh đó, 0 full table scan)
  */
-export async function refreshSubmissionsNow(): Promise<ExamSubmission[]> {
+export async function getStudentSubmissions(studentId: string): Promise<ExamSubmission[]> {
+  const cleanId = String(studentId || '').trim();
+  if (!cleanId) return [];
+
+  // 1. Kiểm tra trong bộ nhớ local trước (0 row reads)
+  const localMatches = localSubmissions.filter((s) => s.studentId === cleanId);
+  if (localMatches.length > 0) {
+    return localMatches;
+  }
+
+  // 2. Nếu chưa có, truy vấn Turso có Index B-Tree theo studentId (chỉ đọc đúng số bài của HS đó)
+  if (isConfigured) {
+    try {
+      const rows = await tursoQuery(
+        `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE studentId = ? AND id NOT LIKE 'draft_%' ORDER BY submittedAt DESC`,
+        [cleanId]
+      );
+      if (Array.isArray(rows)) {
+        const studentSubs = rows.map(normalizeSubmission);
+        studentSubs.forEach((sub) => {
+          if (!localSubmissions.some((s) => s.id === sub.id)) {
+            localSubmissions.push(sub);
+          }
+        });
+        return studentSubs;
+      }
+    } catch (err) {
+      console.warn('Lỗi khi lấy bài thi học sinh:', err);
+    }
+  }
+
+  return localMatches;
+}
+
+let lastKnownSubmissionTime = '';
+
+/**
+ * Kiểm tra xem có bài nộp mới hơn không (CHỈ ĐỌC ĐÚNG 1 ROW READ DUY NHẤT CÓ INDEX B-TREE)
+ * Tuyệt đối không quét toàn bảng, bảo vệ quota Row Read Turso tối đa.
+ */
+export async function checkForNewSubmissions(): Promise<boolean> {
+  const config = getEffectiveTursoConfig();
+  if (!config.isConfigured && !isConfigured) return false;
+
+  try {
+    const rows = await tursoQuery<{ id: string; submittedAt: string }>(
+      `SELECT id, submittedAt FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC LIMIT 1`
+    );
+    const latest = rows?.[0];
+    if (!latest?.submittedAt) return false;
+
+    if (!lastKnownSubmissionTime) {
+      lastKnownSubmissionTime = latest.submittedAt;
+      return false;
+    }
+
+    if (latest.submittedAt !== lastKnownSubmissionTime) {
+      lastKnownSubmissionTime = latest.submittedAt;
+      await refreshSubmissionsNow(true);
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+/**
+ * Hàm cưỡng chế nạp và đồng bộ tức thì tất cả bài thi từ CSDL Turso (dành cho Giáo viên / Quản trị viên)
+ */
+export async function refreshSubmissionsNow(force = false): Promise<ExamSubmission[]> {
+  const now = Date.now();
+  if (!force && now - lastSubmissionsFetchTimestamp < SUBMISSIONS_FETCH_COOLDOWN_MS && localSubmissions.length > 0) {
+    notifySubmissions();
+    return [...localSubmissions];
+  }
+  lastSubmissionsFetchTimestamp = now;
+
   const config = getEffectiveTursoConfig();
   if (!config.isConfigured && !isConfigured) {
     notifySubmissions();
@@ -2276,24 +2302,31 @@ if (typeof window !== 'undefined') {
         localSubmissions = localSubmissions.filter((s) => s.id !== data.payload.id);
         notifySubmissions();
       } else if (data.action === 'REFRESH_ALL') {
-        refreshSubmissionsNow();
+        refreshSubmissionsNow(true);
       }
     };
   }
 
   window.addEventListener('storage', (e) => {
     if (e.key === 'thientch_sub_sync_ts') {
+      refreshSubmissionsNow(true);
+    }
+  });
+
+  // Chỉ nạp lại nếu tab đã rời đi hơn 5 phút (300,000ms), không spam mỗi lần click chuột
+  window.addEventListener('focus', () => {
+    const now = Date.now();
+    if (now - lastSubmissionsFetchTimestamp > 300000) {
       refreshSubmissionsNow();
     }
   });
 
-  window.addEventListener('focus', () => {
-    refreshSubmissionsNow();
-  });
-
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      refreshSubmissionsNow();
+      const now = Date.now();
+      if (now - lastSubmissionsFetchTimestamp > 300000) {
+        refreshSubmissionsNow();
+      }
     }
   });
 }

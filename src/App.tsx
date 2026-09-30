@@ -20,6 +20,7 @@ import {
   subscribeUsers,
   subscribeExams,
   subscribeSubmissions,
+  getStudentSubmissions,
   seedInitialDataIfNeeded,
 } from './services/dbService.ts';
 import { testConnection } from './turso.ts';
@@ -46,22 +47,19 @@ export default function App() {
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'teacher' | 'student' | null>(null);
   const [currentUserData, setCurrentUserData] = useState<UserAccount | Student | null>(null);
 
-  // Initialize Turso subscriptions and connection
+  // 1. Initialize core metadata subscriptions (schools, classes, students, users, exams)
   useEffect(() => {
-    // 1. Kiểm tra kết nối Turso Database
     testConnection()
       .then((connected) => {
         setIsLiveSync(connected);
       })
       .catch(() => setIsLiveSync(false));
 
-    // 2. Real-time subscriptions
     const unsubSchools = subscribeSchools((data) => setSchools(data));
     const unsubClasses = subscribeClasses((data) => setClasses(data));
     const unsubStudents = subscribeStudents((data) => setStudents(data));
     const unsubUsers = subscribeUsers((data) => setUsers(data));
     const unsubExams = subscribeExams((data) => setExams(data));
-    const unsubSubmissions = subscribeSubmissions((data) => setSubmissions(data));
 
     return () => {
       if (unsubSchools) unsubSchools();
@@ -69,9 +67,26 @@ export default function App() {
       if (unsubStudents) unsubStudents();
       if (unsubUsers) unsubUsers();
       if (unsubExams) unsubExams();
-      if (unsubSubmissions) unsubSubmissions();
     };
   }, []);
+
+  // 2. Chống bùng nổ Row Read Turso: Chỉ đăng ký bài nộp toàn trường khi là Giáo viên / Admin
+  // Học sinh tuyệt đối không tải toàn bộ bài thi của cả trường
+  useEffect(() => {
+    if (currentUserRole === 'admin' || currentUserRole === 'teacher') {
+      const unsubSubmissions = subscribeSubmissions((data) => setSubmissions(data));
+      return () => {
+        if (unsubSubmissions) unsubSubmissions();
+      };
+    } else if (currentUserRole === 'student' && currentUserData?.id) {
+      // Học sinh chỉ nạp bài thi của chính mình (chỉ tốn đúng 1-2 row reads có index)
+      getStudentSubmissions(currentUserData.id).then((mySubs) => {
+        setSubmissions(mySubs);
+      }).catch(() => {});
+    } else {
+      setSubmissions([]);
+    }
+  }, [currentUserRole, currentUserData?.id]);
 
   // Check and seed initial data once only if database is completely empty
   useEffect(() => {
