@@ -4017,3 +4017,52 @@ export async function seedInitialDataIfNeeded(existingUsers: UserAccount[], exis
     }
   }
 }
+
+/**
+ * Kiểm tra trạng thái đề thi (dùng cho useExamSecurity và giám sát thi)
+ */
+export async function checkExamStatus(examId: string): Promise<{ isOpen: boolean; status: string }> {
+  try {
+    const cleanId = String(examId || '').trim();
+    if (!cleanId) return { isOpen: true, status: 'published' };
+    const exam = localExams.find((e) => e.id === cleanId);
+    if (exam) {
+      return { isOpen: exam.status === 'published', status: exam.status };
+    }
+    const full = await getExamWithQuestions(cleanId);
+    if (full) {
+      return { isOpen: full.status === 'published', status: full.status };
+    }
+  } catch {}
+  return { isOpen: true, status: 'published' };
+}
+
+/**
+ * Ghi nhận hoặc gửi cảnh báo vi phạm quy chế thi (dùng cho useExamSecurity)
+ */
+export async function reportExamViolation(
+  submissionId: string, 
+  violation: { type: string; label: string; time?: string }
+): Promise<boolean> {
+  try {
+    const cleanSubId = String(submissionId || '').trim();
+    if (!cleanSubId) return true;
+    const sub = localSubmissions.find((s) => s.id === cleanSubId);
+    if (sub) {
+      sub.violationCount = (sub.violationCount || 0) + 1;
+      const logs = Array.isArray(sub.violationLogs) ? [...sub.violationLogs] : [];
+      logs.push({
+        id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        time: violation.time || new Date().toLocaleTimeString('vi-VN'),
+        type: violation.type,
+        label: violation.label,
+      });
+      sub.violationLogs = logs;
+      notifySubmissions();
+    }
+    return true;
+  } catch (err) {
+    console.error('Lỗi khi ghi nhận vi phạm:', err);
+    return false;
+  }
+}
