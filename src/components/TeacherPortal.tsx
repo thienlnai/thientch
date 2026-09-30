@@ -954,6 +954,13 @@ NOTIFY pgrst, 'reload schema';`;
       if (sub.submittedAt.startsWith(targetDate)) return true;
       const localDate = new Date(sub.submittedAt).toLocaleDateString('en-CA');
       if (localDate === targetDate) return true;
+      const d = new Date(sub.submittedAt);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        if (`${year}-${month}-${day}` === targetDate) return true;
+      }
     }
     return false;
   };
@@ -963,10 +970,17 @@ NOTIFY pgrst, 'reload schema';`;
     if (assignedClassIds.size === 0 && teacherExams.length === 0) {
       return submissions;
     }
+    const assignedCodes = new Set(assignedStudents.map((s) => s.studentCode?.toLowerCase()).filter(Boolean));
+    const assignedNames = new Set(assignedStudents.map((s) => s.fullName?.toLowerCase()).filter(Boolean));
+    const teacherExamTitles = new Set(teacherExams.map((e) => e.title?.toLowerCase()).filter(Boolean));
+
     return submissions.filter((sub) => {
       if (sub.classId && assignedClassIds.has(sub.classId)) return true;
       if (teacherExams.some((e) => e.id === sub.examId)) return true;
+      if (sub.examTitle && teacherExamTitles.has(sub.examTitle.toLowerCase())) return true;
       if (assignedStudents.some((s) => s.id === sub.studentId)) return true;
+      if (sub.studentCode && assignedCodes.has(sub.studentCode.toLowerCase())) return true;
+      if (sub.studentName && assignedNames.has(sub.studentName.toLowerCase())) return true;
       return false;
     });
   }, [submissions, assignedClassIds, teacherExams, assignedStudents]);
@@ -1098,11 +1112,23 @@ NOTIFY pgrst, 'reload schema';`;
 
   // Helper tính toán thống kê bài thi của 1 học sinh theo ngày
   const getStudentExamStats = (studentId: string, examId?: string, targetDate?: string) => {
-    let studentSubs = submissions.filter((s) => s.studentId === studentId);
+    const st = students.find((s) => s.id === studentId);
+    let studentSubs = submissions.filter((s) => {
+      if (s.studentId === studentId) return true;
+      if (st?.studentCode && s.studentCode && s.studentCode.trim().toLowerCase() === st.studentCode.trim().toLowerCase()) return true;
+      if (st?.fullName && s.studentName && s.studentName.trim().toLowerCase() === st.fullName.trim().toLowerCase() && (!s.classId || s.classId === st.classId)) return true;
+      return false;
+    });
 
-    // Lọc theo đề thi nếu có
+    // Lọc theo đề thi nếu có (hỗ trợ cả examId và examTitle)
     if (examId && examId !== 'all') {
-      studentSubs = studentSubs.filter((s) => s.examId === examId);
+      const ex = exams?.find((e) => e.id === examId) || teacherExams.find((e) => e.id === examId);
+      const targetTitle = ex?.title?.trim().toLowerCase();
+      studentSubs = studentSubs.filter((s) => {
+        if (s.examId === examId) return true;
+        if (targetTitle && s.examTitle && s.examTitle.trim().toLowerCase() === targetTitle) return true;
+        return false;
+      });
     }
 
     // Lọc theo ngày
@@ -1126,7 +1152,13 @@ NOTIFY pgrst, 'reload schema';`;
   // Danh sách toàn bộ bài thi của học sinh đang xem trong modal
   const studentModalSubmissions = useMemo(() => {
     if (!studentToViewResults) return [];
-    return submissions.filter((s) => s.studentId === studentToViewResults.id);
+    const st = studentToViewResults;
+    return submissions.filter((s) => {
+      if (s.studentId === st.id) return true;
+      if (st.studentCode && s.studentCode && s.studentCode.trim().toLowerCase() === st.studentCode.trim().toLowerCase()) return true;
+      if (st.fullName && s.studentName && s.studentName.trim().toLowerCase() === st.fullName.trim().toLowerCase() && (!s.classId || s.classId === st.classId)) return true;
+      return false;
+    });
   }, [submissions, studentToViewResults]);
 
   // Danh sách các ngày học sinh này có bài nộp
@@ -1734,6 +1766,7 @@ NOTIFY pgrst, 'reload schema';`;
                     <tbody className="divide-y divide-slate-100">
                       {paginatedStudents.map((st, idx) => {
                         const stats = getStudentExamStats(st.id, selectedExamFilter);
+                        const statsAllTime = selectedStatsDate ? getStudentExamStats(st.id, selectedExamFilter, '') : stats;
                         const isPassed = stats.highestScore >= 950;
                         const studentClass = assignedClasses.find((c) => c.id === st.classId);
 
@@ -1790,6 +1823,21 @@ NOTIFY pgrst, 'reload schema';`;
                                     {isPassed ? 'ĐẠT (≥950)' : 'Chưa Đạt'}
                                   </span>
                                 </div>
+                              ) : statsAllTime.attemptCount > 0 ? (
+                                <div className="flex flex-col items-center">
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full font-mono font-bold text-xs ${
+                                      statsAllTime.highestScore >= 950
+                                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+                                        : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    }`}
+                                  >
+                                    {statsAllTime.highestScore} / 1000đ
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-indigo-600 mt-0.5">
+                                    (Đã thi ngày khác)
+                                  </span>
+                                </div>
                               ) : (
                                 <span className="text-slate-400 text-xs italic">Chưa thi</span>
                               )}
@@ -1811,12 +1859,26 @@ NOTIFY pgrst, 'reload schema';`;
                                   <span className="text-[11px] font-semibold text-indigo-600">lần làm</span>
                                   <span className="text-indigo-400 group-hover:text-indigo-700 group-hover:translate-x-0.5 transition-transform text-xs">➔ Xem</span>
                                 </button>
+                              ) : statsAllTime.attemptCount > 0 ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setStudentToViewResults(st);
+                                    setStudentModalDateFilter('');
+                                  }}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 shadow-2xs hover:shadow-xs transition-all cursor-pointer group"
+                                  title="Bấm để xem chi tiết bài thi các ngày khác của học sinh này"
+                                >
+                                  <span className="font-mono text-xs font-black text-indigo-800">{statsAllTime.attemptCount}</span>
+                                  <span className="text-[10px] font-semibold text-indigo-600">lần (ngày khác)</span>
+                                  <span className="text-indigo-400 group-hover:text-indigo-700 group-hover:translate-x-0.5 transition-transform text-xs">➔</span>
+                                </button>
                               ) : (
                                 <button
                                   type="button"
                                   onClick={() => {
                                     setStudentToViewResults(st);
-                                    setStudentModalDateFilter(selectedStatsDate);
+                                    setStudentModalDateFilter('');
                                   }}
                                   className="inline-flex items-center px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-400 text-xs font-mono transition-colors cursor-pointer"
                                   title="Chưa có bài thi nào - Bấm để tra cứu chi tiết"

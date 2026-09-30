@@ -62,7 +62,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   }, []);
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
 
@@ -74,107 +74,158 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
+    // =========================================================================
+    // YÊU CẦU 1: GỌI NGAY document.documentElement.requestFullscreen() ĐỂ LẤY
+    // QUYỀN TƯƠNG TÁC (USER GESTURE) CỦA TRÌNH DUYỆT TRƯỚC KHI AWAIT API ĐĂNG NHẬP
+    // =========================================================================
+    try {
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        const el = document.documentElement as any;
+        const reqFs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (reqFs) {
+          await reqFs.call(el).catch((fsErr: any) => {
+            console.warn('Yêu cầu Fullscreen bị trình duyệt từ chối hoặc cần tương tác:', fsErr);
+          });
+        }
+      }
+    } catch (fsErr) {
+      console.warn('Lỗi requestFullscreen khởi đầu:', fsErr);
+    }
+
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      // 1. Root Admin Priority Check (Guarantees system administrator access never gets locked out)
-      const isAdminUsername =
-        cleanUsername.toLowerCase() === 'admin' ||
-        cleanUsername.toLowerCase() === 'admin@exam.edu.vn';
+    // Giả lập await API Đăng nhập xác thực với Turso / Users collection
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
-      if (
-        isAdminUsername &&
-        (cleanPassword === INITIAL_ADMIN_PASSWORD ||
-         cleanPassword === '8653564@Thien' ||
-         cleanPassword === 'admin')
-      ) {
-        const adminAccount = users.find((u) => u.role === 'admin') || {
-          id: 'admin_root',
-          fullName: 'Quản trị viên Hệ thống (Thiện L.N)',
-          username: 'admin',
-          password: INITIAL_ADMIN_PASSWORD,
-          email: 'admin@exam.edu.vn',
-          phone: '0908 653 564',
-          subjects: 'Quản trị Hệ thống Khảo thí',
-          role: 'admin' as const,
-          status: 'active' as const,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
+    // 1. Root Admin Priority Check (Guarantees system administrator access never gets locked out)
+    const isAdminUsername =
+      cleanUsername.toLowerCase() === 'admin' ||
+      cleanUsername.toLowerCase() === 'admin@exam.edu.vn';
 
-        if (rememberMe) {
-          localStorage.setItem('thientch_remembered_username', cleanUsername);
-        } else {
-          localStorage.removeItem('thientch_remembered_username');
-        }
+    if (
+      isAdminUsername &&
+      (cleanPassword === INITIAL_ADMIN_PASSWORD ||
+       cleanPassword === '8653564@Thien' ||
+       cleanPassword === 'admin')
+    ) {
+      const adminAccount = users.find((u) => u.role === 'admin') || {
+        id: 'admin_root',
+        fullName: 'Quản trị viên Hệ thống (Thiện L.N)',
+        username: 'admin',
+        password: INITIAL_ADMIN_PASSWORD,
+        email: 'admin@exam.edu.vn',
+        phone: '0908 653 564',
+        subjects: 'Quản trị Hệ thống Khảo thí',
+        role: 'admin' as const,
+        status: 'active' as const,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-        setIsSubmitting(false);
-        onLoginSuccess('admin', adminAccount, rememberMe);
-        return;
+      if (rememberMe) {
+        localStorage.setItem('thientch_remembered_username', cleanUsername);
+      } else {
+        localStorage.removeItem('thientch_remembered_username');
       }
 
-      // 2. Check in users collection (Admin or Teacher)
-      const matchedUser = users.find((u) => {
-        const usernameMatch =
-          u.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          u.email.toLowerCase() === cleanUsername.toLowerCase();
-        if (!usernameMatch) return false;
-
-        // Admin fallback check
-        if (u.role === 'admin' && (cleanPassword === INITIAL_ADMIN_PASSWORD || cleanPassword === '8653564@Thien')) {
-          return true;
-        }
-        return u.password === cleanPassword;
-      });
-
-      if (matchedUser) {
-        if (matchedUser.status === 'suspended') {
-          setErrorMsg(t.errorAccountSuspended);
-          setIsSubmitting(false);
-          return;
-        }
-
-        if (rememberMe) {
-          localStorage.setItem('thientch_remembered_username', cleanUsername);
-        } else {
-          localStorage.removeItem('thientch_remembered_username');
-        }
-
-        setIsSubmitting(false);
-        onLoginSuccess(matchedUser.role, matchedUser, rememberMe);
-        return;
+      // Xử lý kết quả: Admin -> Thoát Fullscreen và chuyển hướng
+      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+        try {
+          const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
+          if (exitFs) await exitFs.call(document).catch(() => {});
+        } catch {}
       }
 
-      // 3. Check in students collection (by studentCode or username)
-      const matchedStudent = students.find((s) => {
-        const idMatch =
-          s.username.toLowerCase() === cleanUsername.toLowerCase() ||
-          s.studentCode.toLowerCase() === cleanUsername.toLowerCase();
-        return idMatch && s.password === cleanPassword;
-      });
-
-      if (matchedStudent) {
-        if (matchedStudent.status === 'suspended') {
-          setErrorMsg(t.errorAccountSuspended);
-          setIsSubmitting(false);
-          return;
-        }
-
-        if (rememberMe) {
-          localStorage.setItem('thientch_remembered_username', cleanUsername);
-        } else {
-          localStorage.removeItem('thientch_remembered_username');
-        }
-
-        setIsSubmitting(false);
-        onLoginSuccess('student', matchedStudent, rememberMe);
-        return;
-      }
-
-      // 4. Fallback: Invalid Credentials
-      setErrorMsg(t.errorInvalidCredentials);
       setIsSubmitting(false);
-    }, 250);
+      onLoginSuccess('admin', adminAccount, rememberMe);
+      return;
+    }
+
+    // 2. Check in users collection (Admin or Teacher)
+    const matchedUser = users.find((u) => {
+      const usernameMatch =
+        u.username.toLowerCase() === cleanUsername.toLowerCase() ||
+        u.email.toLowerCase() === cleanUsername.toLowerCase();
+      if (!usernameMatch) return false;
+
+      // Admin fallback check
+      if (u.role === 'admin' && (cleanPassword === INITIAL_ADMIN_PASSWORD || cleanPassword === '8653564@Thien')) {
+        return true;
+      }
+      return u.password === cleanPassword;
+    });
+
+    if (matchedUser) {
+      if (matchedUser.status === 'suspended') {
+        setErrorMsg(t.errorAccountSuspended);
+        setIsSubmitting(false);
+        if (document.fullscreenElement) {
+          try { document.exitFullscreen().catch(() => {}); } catch {}
+        }
+        return;
+      }
+
+      if (rememberMe) {
+        localStorage.setItem('thientch_remembered_username', cleanUsername);
+      } else {
+        localStorage.removeItem('thientch_remembered_username');
+      }
+
+      // Xử lý kết quả: Nếu role === 'admin' hoặc role === 'teacher' -> lập tức thoát Fullscreen
+      if (matchedUser.role === 'admin' || matchedUser.role === 'teacher') {
+        if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+          try {
+            const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
+            if (exitFs) await exitFs.call(document).catch(() => {});
+          } catch {}
+        }
+      }
+
+      setIsSubmitting(false);
+      onLoginSuccess(matchedUser.role, matchedUser, rememberMe);
+      return;
+    }
+
+    // 3. Check in students collection (by studentCode or username)
+    const matchedStudent = students.find((s) => {
+      const idMatch =
+        s.username.toLowerCase() === cleanUsername.toLowerCase() ||
+        s.studentCode.toLowerCase() === cleanUsername.toLowerCase();
+      return idMatch && s.password === cleanPassword;
+    });
+
+    if (matchedStudent) {
+      if (matchedStudent.status === 'suspended') {
+        setErrorMsg(t.errorAccountSuspended);
+        setIsSubmitting(false);
+        if (document.fullscreenElement) {
+          try { document.exitFullscreen().catch(() => {}); } catch {}
+        }
+        return;
+      }
+
+      if (rememberMe) {
+        localStorage.setItem('thientch_remembered_username', cleanUsername);
+      } else {
+        localStorage.removeItem('thientch_remembered_username');
+      }
+
+      // Xử lý kết quả: Nếu role === 'student' -> GIỮ NGUYÊN Fullscreen và khởi chạy làm bài thi
+      setIsSubmitting(false);
+      onLoginSuccess('student', matchedStudent, rememberMe);
+      return;
+    }
+
+    // 4. Fallback: Invalid Credentials -> Thoát fullscreen nếu đã lỡ request
+    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+      try {
+        const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
+        if (exitFs) await exitFs.call(document).catch(() => {});
+      } catch {}
+    }
+
+    setErrorMsg(t.errorInvalidCredentials);
+    setIsSubmitting(false);
   };
 
   return (

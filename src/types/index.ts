@@ -35,7 +35,10 @@ export interface Student {
   gender: 'male' | 'female' | 'other';
   username: string;
   password: string; // Mật khẩu cấp sẵn
-  status: 'active' | 'suspended';
+  status: 'active' | 'suspended' | 'VIOLATION_EXIT_SCREEN';
+  allow_exit_fullscreen?: boolean;
+  violationCount?: number;
+  lastViolationTime?: string;
   note?: string;
   createdAt: string;
   updatedAt: string;

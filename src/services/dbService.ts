@@ -2191,9 +2191,9 @@ export function subscribeSubmissions(onUpdate: (submissions: ExamSubmission[]) =
       lastKnownTursoCount = currentCount;
       lastKnownTursoLatest = currentLatest;
 
-      // BƯỚC 2: Khi phát hiện bài thi mới nộp, tải danh sách bài thi mới nhất
+      // BƯỚC 2: Khi phát hiện bài thi mới nộp, tải toàn bộ danh sách bài thi từ Turso
       const rows = await tursoQuery(
-        `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC LIMIT 200`
+        `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC`
       );
       if (Array.isArray(rows)) {
         const remoteSubs = rows.map(normalizeSubmission);
@@ -2236,7 +2236,7 @@ export async function refreshSubmissionsNow(): Promise<ExamSubmission[]> {
 
   try {
     const rows = await tursoQuery(
-      `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC LIMIT 250`
+      `SELECT * FROM ${SUBMISSIONS_TABLE} WHERE id NOT LIKE 'draft_%' ORDER BY submittedAt DESC`
     );
     if (Array.isArray(rows)) {
       const remoteSubs = rows.map(normalizeSubmission);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Student, 
   School, 
@@ -29,9 +29,11 @@ import {
   ArrowRight,
   Flame,
   FileCheck2,
-  FileQuestion
+  FileQuestion,
+  Maximize
 } from 'lucide-react';
 import { addExamSubmission, getExamWithQuestions } from '../services/dbService.ts';
+import { useExamSecurity } from '../hooks/useExamSecurity.ts';
 import { 
   isExamVisibleToGrade, 
   getClassGradeNumber, 
@@ -79,6 +81,72 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  // ================= BẢO MẬT & GIÁM SÁT CHỐNG THOÁT MÀN HÌNH TẠI GIAO DIỆN HỌC SINH =================
+  // Theo dõi trạng thái toàn màn hình
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
+    return Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
+  });
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, []);
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  // Hook bảo mật phòng thi & giám sát thoát màn hình tại Giao diện Học sinh
+  const {
+    isLocked: isPortalLocked,
+    lockReason: portalLockReason,
+    isTeacherUnlocked: isPortalTeacherUnlocked,
+    isChecking: isCheckingPortalSecurity,
+    reEnterFullscreen: reEnterPortalFullscreen,
+    manuallyCheckStatus: checkPortalSecurityStatus,
+    setIsLocked: setPortalLocked
+  } = useExamSecurity({
+    studentId: student.id,
+    studentName: student.fullName,
+    studentCode: student.studentCode,
+    examId: '',
+    examTitle: 'Giao Diện Học Sinh',
+    enabled: !takingExam && !isLoggingOut,
+    onViolationRecorded: (type, reason) => {
+      console.warn(`[Giao diện Học sinh] Vi phạm an ninh: ${type} - ${reason}`);
+    }
+  });
+
+  const requestPortalFullscreen = async () => {
+    try {
+      const el = document.documentElement as any;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (req) {
+        await req.call(el);
+        setIsFullscreen(true);
+      }
+    } catch (err) {
+      console.warn('Lỗi bật toàn màn hình tại Cổng Học sinh:', err);
+    }
+  };
+
+  const handlePortalLogout = async () => {
+    setIsLoggingOut(true);
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      }
+    } catch (e) {
+      // ignore
+    }
+    onLogout();
   };
 
   // Khởi động làm bài thi: tải toàn bộ câu hỏi qua getExamWithQuestions (Single Query JOIN + Cache)
@@ -257,7 +325,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         userRoleName="THÍ SINH KHẢO THÍ IT"
         userName={student.fullName}
         userSubtext={`${studentClass?.name || 'Học sinh'}${studentGrade ? ` (Khối ${studentGrade})` : ''} • SBD: ${student.studentCode}`}
-        onLogout={onLogout}
+        onLogout={handlePortalLogout}
         headerSubtitle="Cổng Thi Trực Tuyến Chuẩn Hóa"
         themeColor="emerald"
       />
@@ -267,7 +335,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         <TopBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onLogout={onLogout}
+          onLogout={handlePortalLogout}
           userName={student.fullName}
           userRole="student"
           lang={lang}
@@ -733,6 +801,121 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           exams={exams}
           onClose={() => setReviewingSubmission(null)}
         />
+      )}
+
+      {/* ================= BANNER / MODAL YÊU CẦU BẬT TOÀN MÀN HÌNH ================= */}
+      {!isFullscreen && !isPortalLocked && !takingExam && !isLoggingOut && (
+        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-slate-700 flex items-center justify-between gap-4 max-w-md animate-in slide-in-from-bottom-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
+              <Maximize className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-slate-100">Chế Độ Toàn Màn Hình Khảo Thí</p>
+              <p className="text-[11px] text-slate-400">Yêu cầu bật toàn màn hình để đảm bảo an ninh phòng thi</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={requestPortalFullscreen}
+            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/30 transition-all shrink-0 cursor-pointer"
+          >
+            Bật Ngay
+          </button>
+        </div>
+      )}
+
+      {/* ================= MODAL KHÓA MÀN HÌNH DO VI PHẠM THOÁT MÀN HÌNH TẠI GIAO DIỆN HỌC SINH ================= */}
+      {isPortalLocked && !takingExam && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-2xl border-2 border-red-500 animate-in zoom-in-95 duration-200">
+            {isPortalTeacherUnlocked ? (
+              /* TRẠNG THÁI: GIÁO VIÊN ĐÃ MỞ KHÓA */
+              <div className="space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200 shadow-sm animate-bounce">
+                  <CheckCircle2 className="w-9 h-9" />
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
+                  <span>GIÁO VIÊN ĐÃ CẤP QUYỀN MỞ KHÓA!</span>
+                </div>
+
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                  Bạn Đã Được Phép Tiếp Tục!
+                </h3>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Giáo viên đã phê duyệt mở khóa phiên làm việc. Hãy nhấn nút bên dưới để quay lại chế độ Toàn Màn Hình và tiếp tục học tập, làm bài thi.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await reEnterPortalFullscreen();
+                    await requestPortalFullscreen();
+                    setPortalLocked(false);
+                  }}
+                  className="mt-4 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Maximize className="w-4 h-4" />
+                  <span>Vào Lại Toàn Màn Hình & Tiếp Tục</span>
+                </button>
+              </div>
+            ) : (
+              /* TRẠNG THÁI: BỊ KHÓA VÌ VI PHẠM THOÁT MÀN HÌNH */
+              <div className="space-y-4">
+                <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-sm animate-pulse">
+                  <ShieldAlert className="w-9 h-9" />
+                </div>
+
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200 animate-pulse">
+                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
+                  <span>VI PHẠM: THOÁT MÀN HÌNH CHƯA ĐƯỢC PHÉP</span>
+                </div>
+
+                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
+                  Giao Diện Học Sinh Đang Bị Khóa An Toàn!
+                </h3>
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {portalLockReason || 'Hệ thống phát hiện thao tác rời khỏi chế độ Toàn Màn Hình (nhấn ESC) hoặc chuyển sang cửa sổ/ứng dụng khác mà chưa được Giáo Viên cho phép.'}
+                </p>
+
+                {/* Status Box */}
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
+                  <div className="flex items-center gap-2 text-xs text-slate-600">
+                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
+                    <span>Đang chờ giáo viên cấp quyền mở khóa (Thăm dò 5 giây/lần)...</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex flex-col sm:flex-row gap-2">
+                  <button
+                    type="button"
+                    onClick={checkPortalSecurityStatus}
+                    disabled={isCheckingPortalSecurity}
+                    className="flex-1 py-3 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-95 text-slate-700 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingPortalSecurity ? 'animate-spin' : ''}`} />
+                    <span>{isCheckingPortalSecurity ? 'Đang kiểm tra...' : 'Kiểm tra lệnh mở khóa ngay'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await reEnterPortalFullscreen();
+                      await requestPortalFullscreen();
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Maximize className="w-3.5 h-3.5" />
+                    <span>Thử vào lại Fullscreen</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

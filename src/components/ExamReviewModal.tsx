@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
+import { getExamWithQuestions } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
 import { 
@@ -37,6 +38,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
 }) => {
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [loadedExam, setLoadedExam] = useState<Exam | null>(null);
 
   // Lightbox Zoom state for review images
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
@@ -51,6 +53,23 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     setLightboxImage(null);
   };
 
+  // Nạp chi tiết đề thi (kèm toàn bộ câu hỏi và options) nếu chưa có sẵn trong bộ nhớ
+  useEffect(() => {
+    if (submission.questionsSnapshot && submission.questionsSnapshot.length > 0) return;
+    const currentTarget = exam || (exams ? exams.find((e) => e.id === submission.examId) : undefined);
+    if (!currentTarget || !currentTarget.questions || currentTarget.questions.length === 0) {
+      if (submission.examId) {
+        getExamWithQuestions(submission.examId)
+          .then((full) => {
+            if (full && full.questions && full.questions.length > 0) {
+              setLoadedExam(full);
+            }
+          })
+          .catch((err) => console.error('Lỗi nạp đề thi xem lại:', err));
+      }
+    }
+  }, [submission.examId, submission.questionsSnapshot, exam, exams]);
+
   // Tái tạo danh sách câu hỏi một cách thông minh:
   // 1. Dùng snapshot có sẵn trong bộ nhớ (nếu vừa thi xong)
   // 2. Hoặc tái tạo từ đề thi gốc qua questionOrder (tiết kiệm 95% dung lượng CSDL)
@@ -59,7 +78,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
       return submission.questionsSnapshot;
     }
 
-    const targetExam = exam || (exams ? exams.find((e) => e.id === submission.examId) : undefined);
+    const targetExam = loadedExam || exam || (exams ? exams.find((e) => e.id === submission.examId) : undefined);
     if (!targetExam || !targetExam.questions || targetExam.questions.length === 0) {
       return [];
     }
@@ -81,7 +100,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     }
 
     return targetExam.questions;
-  }, [submission, exam, exams]);
+  }, [submission, exam, exams, loadedExam]);
 
   const currentQ = questions[selectedQuestionIndex];
   const qResult = currentQ ? submission.questionResults[currentQ.id] : null;
@@ -428,7 +447,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                 </div>
 
                 {/* Media ảnh hoặc video */}
-                {currentQ.mediaType === 'image' && currentQ.mediaUrl && (
+                {currentQ.mediaUrl && currentQ.mediaType !== 'video' && (
                   <div className="p-2.5 rounded-2xl bg-slate-50 border border-slate-200 shadow-xs">
                     <div
                       onClick={(e) => handleOpenLightbox(e, currentQ.mediaUrl!, `Hình ảnh câu hỏi ${selectedQuestionIndex + 1}`)}
@@ -487,30 +506,59 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                       return (
                         <div
                           key={opt.id}
-                          className={`p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 transition-transform hover:translate-x-0.5 ${rowClass}`}
+                          className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-transform hover:translate-x-0.5 ${rowClass}`}
                         >
-                          <div className="flex items-center gap-3">
-                            <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
+                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 sm:mt-0 ${
                               isCorrect 
-                                ? 'bg-emerald-600 text-white border-emerald-600' 
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
                                 : isStudentChosen 
-                                ? 'bg-rose-600 text-white border-rose-600' 
+                                ? 'bg-rose-600 text-white border-rose-600 shadow-xs' 
                                 : 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}>
                               {charLabel}
                             </span>
-                            <span className="text-sm">{opt.text}</span>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              {opt.text && (
+                                <div className="text-sm sm:text-base font-medium leading-relaxed break-words">
+                                  {opt.text}
+                                </div>
+                              )}
+                              {opt.imageUrl && (
+                                <div
+                                  onClick={(e) =>
+                                    handleOpenLightbox(
+                                      e,
+                                      opt.imageUrl!,
+                                      `Đáp án ${charLabel}${opt.text ? ': ' + opt.text : ''}`
+                                    )
+                                  }
+                                  className="group/optimg relative inline-block cursor-zoom-in max-w-full"
+                                  title="Nhấp để phóng to hình ảnh đáp án"
+                                >
+                                  <img
+                                    src={opt.imageUrl}
+                                    alt={`Đáp án ${charLabel}`}
+                                    className="max-h-40 sm:max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs transition-all duration-200 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-400 group-hover/optimg:shadow-md"
+                                  />
+                                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>Phóng to</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-bold">
+                          <div className="flex items-center gap-2 text-xs font-bold shrink-0 self-start sm:self-center">
                             {isCorrect && (
-                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/70 px-2.5 py-1 rounded-lg">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/80 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span>Đáp án đúng</span>
                               </span>
                             )}
                             {isStudentChosen && !isCorrect && (
-                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/70 px-2.5 py-1 rounded-lg">
-                                <XCircle className="w-4 h-4 text-rose-600" />
+                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/80 px-2.5 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
+                                <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
                                 <span>Bạn đã chọn sai</span>
                               </span>
                             )}
@@ -540,30 +588,59 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                       return (
                         <div
                           key={opt.id}
-                          className={`p-3.5 sm:p-4 rounded-2xl border flex items-center justify-between gap-3 transition-transform hover:translate-x-0.5 ${rowClass}`}
+                          className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-transform hover:translate-x-0.5 ${rowClass}`}
                         >
-                          <div className="flex items-center gap-3">
-                            <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border ${
+                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 sm:mt-0 ${
                               isCorrect 
-                                ? 'bg-emerald-600 text-white border-emerald-600' 
+                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
                                 : isStudentChosen 
-                                ? 'bg-rose-600 text-white border-rose-600' 
+                                ? 'bg-rose-600 text-white border-rose-600 shadow-xs' 
                                 : 'bg-slate-100 text-slate-700 border-slate-200'
                             }`}>
                               {charLabel}
                             </span>
-                            <span className="text-sm">{opt.text}</span>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              {opt.text && (
+                                <div className="text-sm sm:text-base font-medium leading-relaxed break-words">
+                                  {opt.text}
+                                </div>
+                              )}
+                              {opt.imageUrl && (
+                                <div
+                                  onClick={(e) =>
+                                    handleOpenLightbox(
+                                      e,
+                                      opt.imageUrl!,
+                                      `Đáp án ${charLabel}${opt.text ? ': ' + opt.text : ''}`
+                                    )
+                                  }
+                                  className="group/optimg relative inline-block cursor-zoom-in max-w-full"
+                                  title="Nhấp để phóng to hình ảnh đáp án"
+                                >
+                                  <img
+                                    src={opt.imageUrl}
+                                    alt={`Đáp án ${charLabel}`}
+                                    className="max-h-40 sm:max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs transition-all duration-200 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-400 group-hover/optimg:shadow-md"
+                                  />
+                                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                                    <ZoomIn className="w-3 h-3" />
+                                    <span>Phóng to</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-bold">
+                          <div className="flex items-center gap-2 text-xs font-bold shrink-0 self-start sm:self-center">
                             {isCorrect && (
-                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/70 px-2.5 py-1 rounded-lg">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/80 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span>Đáp án đúng</span>
                               </span>
                             )}
                             {isStudentChosen && !isCorrect && (
-                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/70 px-2.5 py-1 rounded-lg">
-                                <XCircle className="w-4 h-4 text-rose-600" />
+                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/80 px-2.5 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
+                                <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
                                 <span>Bạn chọn sai</span>
                               </span>
                             )}
@@ -590,8 +667,8 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                             isMatchCorrect ? 'bg-emerald-50/90 border-emerald-300' : 'bg-rose-50/90 border-rose-300'
                           }`}
                         >
-                          <div className="font-bold text-slate-800 flex items-center gap-2.5">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold">
+                          <div className="font-bold text-slate-800 flex items-center gap-2.5 flex-wrap">
+                            <span className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold shrink-0">
                               {idx + 1}
                             </span>
                             <span className="text-sm">{p.leftText}</span>
@@ -612,16 +689,46 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                             )}
                           </div>
                           <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 font-medium">
+                            <div className="flex items-center gap-1.5 font-medium flex-wrap">
                               <span className="text-slate-500">Bạn ghép với:</span>
                               <strong className={`font-bold ${isMatchCorrect ? 'text-emerald-700' : 'text-rose-700'}`}>
                                 {studentChosenPair ? studentChosenPair.rightText : 'Chưa ghép'}
                               </strong>
+                              {studentChosenPair?.rightImageUrl && (
+                                <div
+                                  onClick={(e) =>
+                                    handleOpenLightbox(e, studentChosenPair.rightImageUrl!, `Ảnh bạn chọn: ${studentChosenPair.rightText}`)
+                                  }
+                                  className="cursor-zoom-in group/mimg relative inline-block shrink-0"
+                                  title="Nhấp để phóng to"
+                                >
+                                  <img
+                                    src={studentChosenPair.rightImageUrl}
+                                    alt="Ảnh bạn chọn"
+                                    className="h-9 w-12 object-cover rounded-lg border border-slate-300"
+                                  />
+                                </div>
+                              )}
                               <span>{isMatchCorrect ? '✓' : '✕'}</span>
                             </div>
                             {!isMatchCorrect && (
-                              <div className="text-emerald-700 font-bold bg-emerald-100/60 px-2 py-0.5 rounded-md inline-block">
-                                Đáp án chính xác: <strong>{p.rightText}</strong>
+                              <div className="text-emerald-700 font-bold bg-emerald-100/60 px-2 py-0.5 rounded-md flex items-center gap-1.5 flex-wrap">
+                                <span>Đáp án chính xác: <strong>{p.rightText}</strong></span>
+                                {p.rightImageUrl && (
+                                  <div
+                                    onClick={(e) =>
+                                      handleOpenLightbox(e, p.rightImageUrl!, `Đáp án chính xác: ${p.rightText}`)
+                                    }
+                                    className="cursor-zoom-in group/mimg relative inline-block shrink-0"
+                                    title="Nhấp để phóng to"
+                                  >
+                                    <img
+                                      src={p.rightImageUrl}
+                                      alt="Ảnh đáp án chính xác"
+                                      className="h-7 w-10 object-cover rounded-md border border-emerald-300"
+                                    />
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>
@@ -633,23 +740,90 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
 
                 {/* 4. ORDERING */}
                 {currentQ.type === 'ordering' && currentQ.orderingItems && (
-                  <div className="space-y-2 text-xs">
-                    <div className="p-4 bg-gradient-to-br from-indigo-50/80 via-white to-indigo-50/40 border border-indigo-200 rounded-2xl space-y-2 shadow-xs">
-                      <div className="font-bold text-indigo-900 flex items-center gap-1.5">
-                        <Sparkles className="w-4 h-4 text-indigo-600" />
-                        <span>Thứ tự đúng chuẩn của giáo viên:</span>
-                      </div>
-                      <div className="space-y-1.5">
-                        {currentQ.orderingItems.map((item, idx) => (
-                          <div key={item.id} className="flex items-center gap-2 text-slate-800 font-semibold bg-white p-2.5 rounded-xl border border-indigo-100 shadow-xs">
-                            <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-mono text-xs flex items-center justify-center font-bold">
-                              {idx + 1}
-                            </span>
-                            <span>{item.text}</span>
+                  <div className="space-y-3 text-xs">
+                    {(() => {
+                      const studentOrder: string[] = submission.studentAnswers[currentQ.id] || [];
+                      const itemMap = new Map((currentQ.orderingItems || []).map((i) => [i.id, i]));
+                      const isCompletelyCorrect = qResult?.isCorrect;
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 shadow-xs">
+                            <div className="font-bold text-slate-800 flex items-center justify-between">
+                              <span className="flex items-center gap-1.5">
+                                <span>Thứ tự bạn đã chọn:</span>
+                              </span>
+                              <span className={`px-2 py-0.5 rounded-lg text-xs font-bold ${
+                                isCompletelyCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                              }`}>
+                                {isCompletelyCorrect ? '✓ Hoàn toàn chính xác' : '✕ Thứ tự chưa đúng'}
+                              </span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {studentOrder.length > 0 ? (
+                                studentOrder.map((itemId, idx) => {
+                                  const item = itemMap.get(itemId);
+                                  if (!item) return null;
+                                  return (
+                                    <div key={itemId} className="flex items-center gap-2.5 text-slate-800 font-semibold bg-white p-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                                      <span className="w-6 h-6 rounded-lg bg-slate-700 text-white font-mono text-xs flex items-center justify-center font-bold shrink-0">
+                                        {idx + 1}
+                                      </span>
+                                      <span className="flex-1">{item.text}</span>
+                                      {item.imageUrl && (
+                                        <div
+                                          onClick={(e) => handleOpenLightbox(e, item.imageUrl!, `Thứ tự ${idx + 1}: ${item.text}`)}
+                                          className="cursor-zoom-in group/oimg relative inline-block shrink-0"
+                                          title="Nhấp để phóng to"
+                                        >
+                                          <img
+                                            src={item.imageUrl}
+                                            alt={item.text}
+                                            className="h-10 w-14 object-contain rounded-lg border border-slate-200 bg-white"
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })
+                              ) : (
+                                <div className="text-slate-400 italic py-1">Chưa sắp xếp</div>
+                              )}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+
+                          <div className="p-4 bg-gradient-to-br from-indigo-50/80 via-white to-indigo-50/40 border border-indigo-200 rounded-2xl space-y-2 shadow-xs">
+                            <div className="font-bold text-indigo-900 flex items-center gap-1.5">
+                              <Sparkles className="w-4 h-4 text-indigo-600" />
+                              <span>Thứ tự đúng chuẩn của giáo viên:</span>
+                            </div>
+                            <div className="space-y-1.5">
+                              {currentQ.orderingItems.map((item, idx) => (
+                                <div key={item.id} className="flex items-center gap-2.5 text-slate-800 font-semibold bg-white p-2.5 rounded-xl border border-indigo-100 shadow-xs">
+                                  <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-mono text-xs flex items-center justify-center font-bold shrink-0">
+                                    {idx + 1}
+                                  </span>
+                                  <span className="flex-1">{item.text}</span>
+                                  {item.imageUrl && (
+                                    <div
+                                      onClick={(e) => handleOpenLightbox(e, item.imageUrl!, `Thứ tự chuẩn ${idx + 1}: ${item.text}`)}
+                                      className="cursor-zoom-in group/oimg relative inline-block shrink-0"
+                                      title="Nhấp để phóng to"
+                                    >
+                                      <img
+                                        src={item.imageUrl}
+                                        alt={item.text}
+                                        className="h-10 w-14 object-contain rounded-lg border border-slate-200 bg-white"
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 

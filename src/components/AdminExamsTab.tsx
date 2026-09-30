@@ -1171,18 +1171,25 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                           return (
                             <div
                               key={opt.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                              className={`p-2.5 rounded-xl border text-xs flex flex-wrap items-center gap-2 ${
                                 isCorrect
                                   ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold'
                                   : 'bg-white border-slate-200 text-slate-700'
                               }`}
                             >
-                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
                                 isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
                               }`}>
                                 {isCorrect ? '✓' : ''}
                               </span>
-                              <span>{opt.text}</span>
+                              {opt.text && <span>{opt.text}</span>}
+                              {opt.imageUrl && (
+                                <img
+                                  src={opt.imageUrl}
+                                  alt="Ảnh đáp án"
+                                  className="h-10 w-14 object-contain rounded-md border border-slate-200 bg-white"
+                                />
+                              )}
                               {isCorrect && (
                                 <span className="ml-auto text-[10px] font-bold text-emerald-700 uppercase">
                                   Đáp án đúng
@@ -1202,18 +1209,25 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                           return (
                             <div
                               key={opt.id}
-                              className={`p-2.5 rounded-xl border text-xs flex items-center gap-2 ${
+                              className={`p-2.5 rounded-xl border text-xs flex flex-wrap items-center gap-2 ${
                                 isCorrect
                                   ? 'bg-emerald-50 border-emerald-300 text-emerald-950 font-bold'
                                   : 'bg-white border-slate-200 text-slate-700'
                               }`}
                             >
-                              <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold ${
+                              <span className={`w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold shrink-0 ${
                                 isCorrect ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-600'
                               }`}>
                                 {isCorrect ? '✓' : ''}
                               </span>
-                              <span>{opt.text}</span>
+                              {opt.text && <span>{opt.text}</span>}
+                              {opt.imageUrl && (
+                                <img
+                                  src={opt.imageUrl}
+                                  alt="Ảnh đáp án"
+                                  className="h-10 w-14 object-contain rounded-md border border-slate-200 bg-white"
+                                />
+                              )}
                               {isCorrect && (
                                 <span className="ml-auto text-[10px] font-bold text-emerald-700 uppercase">
                                   Đáp án đúng
@@ -1231,10 +1245,20 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                         <div className="text-[11px] font-bold text-slate-500 uppercase">Các cặp ghép chuẩn:</div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {q.matchingPairs.map((pair, pIdx) => (
-                            <div key={pIdx} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs flex items-center justify-between gap-2">
-                              <span className="font-semibold text-slate-900">{pair.leftText}</span>
+                            <div key={pIdx} className="p-2.5 rounded-xl bg-white border border-slate-200 text-xs flex items-center justify-between gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-semibold text-slate-900">{pair.leftText}</span>
+                                {pair.leftImageUrl && (
+                                  <img src={pair.leftImageUrl} alt="Left" className="h-8 w-10 object-contain rounded border border-slate-200" />
+                                )}
+                              </div>
                               <span className="text-slate-400 font-bold">⇄</span>
-                              <span className="font-bold text-emerald-700">{pair.rightText}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-emerald-700">{pair.rightText}</span>
+                                {pair.rightImageUrl && (
+                                  <img src={pair.rightImageUrl} alt="Right" className="h-8 w-10 object-contain rounded border border-slate-200" />
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1251,6 +1275,9 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                               {oIdx + 1}
                             </span>
                             <span className="font-medium text-slate-900">{item.text}</span>
+                            {item.imageUrl && (
+                              <img src={item.imageUrl} alt={item.text} className="h-8 w-10 object-contain rounded border border-slate-200 ml-auto" />
+                            )}
                           </div>
                         ))}
                       </div>

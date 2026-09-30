@@ -3,6 +3,94 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 
+function apiRoutesDevPlugin() {
+  return {
+    name: 'api-routes-dev-plugin',
+    configureServer(server: any) {
+      server.middlewares.use(async (req: any, res: any, next: any) => {
+        if (!req.url || !req.url.startsWith('/api/')) return next();
+
+        const urlObj = new URL(req.url, 'http://localhost:3000');
+        const pathname = urlObj.pathname;
+
+        const parseBody = () => new Promise<any>((resolve) => {
+          let data = '';
+          req.on('data', (chunk: any) => { data += chunk; });
+          req.on('end', () => {
+            try { resolve(JSON.parse(data)); } catch { resolve({}); }
+          });
+        });
+
+        const executeHandler = async (handler: any, body: any = {}) => {
+          const reqShim = {
+            method: req.method,
+            url: req.url,
+            query: Object.fromEntries(urlObj.searchParams.entries()),
+            body,
+            headers: req.headers,
+          };
+          const resShim = {
+            statusCode: 200,
+            status(code: number) { this.statusCode = code; return this; },
+            setHeader(name: string, val: string) { res.setHeader(name, val); },
+            json(data: any) {
+              res.statusCode = this.statusCode;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(data));
+            },
+            end(data = '') {
+              res.statusCode = this.statusCode;
+              res.end(data);
+            }
+          };
+          await handler(reqShim, resShim);
+        };
+
+        try {
+          if (pathname === '/api/check-exam-status') {
+            const { default: handler } = await import('./api/check-exam-status.ts');
+            const body = req.method === 'POST' ? await parseBody() : {};
+            await executeHandler(handler, body);
+            return;
+          }
+          if (pathname === '/api/exam-violation') {
+            const { default: handler } = await import('./api/exam-violation.ts');
+            const body = await parseBody();
+            await executeHandler(handler, body);
+            return;
+          }
+          if (pathname === '/api/unlock-exam') {
+            const { default: handler } = await import('./api/unlock-exam.ts');
+            const body = await parseBody();
+            await executeHandler(handler, body);
+            return;
+          }
+          if (pathname === '/api/exam') {
+            const { default: handler } = await import('./api/exam.ts');
+            const body = req.method === 'POST' ? await parseBody() : {};
+            await executeHandler(handler, body);
+            return;
+          }
+          if (pathname === '/api/submit-exam') {
+            const { default: handler } = await import('./api/submit-exam.ts');
+            const body = await parseBody();
+            await executeHandler(handler, body);
+            return;
+          }
+        } catch (err: any) {
+          console.error('API Route execution error:', err);
+          res.statusCode = 500;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ success: false, error: err?.message || String(err) }));
+          return;
+        }
+
+        next();
+      });
+    }
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
 
@@ -14,7 +102,7 @@ export default defineConfig(({ mode }) => {
   const githubBranch = env.GITHUB_BRANCH || env.VITE_GITHUB_BRANCH || process.env.GITHUB_BRANCH || process.env.VITE_GITHUB_BRANCH || 'main';
 
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), apiRoutesDevPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
