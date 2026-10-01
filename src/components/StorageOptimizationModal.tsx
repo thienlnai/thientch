@@ -22,6 +22,7 @@ import {
 import { 
   purgePracticeSubmissions, 
   purgeOldSubmissions, 
+  purgeAllDraftSubmissions,
   optimizeExistingSubmissionsStorage, 
   exportSubmissionsArchive 
 } from '../services/dbService.ts';
@@ -48,6 +49,9 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
   const stats = useMemo(() => {
     const total = submissions.length;
     const practiceCount = submissions.filter((s) => s.isPractice).length;
+    const draftCount = submissions.filter(
+      (s) => s.id.startsWith('draft_') || s.examTitle === 'Bản nháp thi'
+    ).length;
     
     const now = Date.now();
     const olderThan30 = submissions.filter(
@@ -74,6 +78,7 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
     return {
       total,
       practiceCount,
+      draftCount,
       olderThan30,
       olderThan60,
       olderThan90,
@@ -136,6 +141,20 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
       onActionComplete(`Đã dọn dẹp ${deleted} bài thi cũ hơn ${retentionDays} ngày thành công!`);
     } catch {
       onActionComplete('Không thể xóa bài thi cũ.');
+    } finally {
+      setIsProcessing(false);
+      setConfirmAction(null);
+    }
+  };
+
+  // 5. Dọn dẹp bản nháp rác
+  const handlePurgeDrafts = async () => {
+    setIsProcessing(true);
+    try {
+      await purgeAllDraftSubmissions();
+      onActionComplete('Đã xóa sạch toàn bộ các Bản nháp thi rác trên Turso thành công!');
+    } catch {
+      onActionComplete('Lỗi khi dọn dẹp bản nháp thi.');
     } finally {
       setIsProcessing(false);
       setConfirmAction(null);
@@ -279,15 +298,43 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
+              {/* Card Dọn Bản Nháp Rác */}
+              <div className="p-4 rounded-xl bg-purple-50/70 border border-purple-200 flex flex-col justify-between gap-3">
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-purple-900 flex items-center gap-1.5">
+                      <Trash2 className="w-4 h-4 text-purple-600" />
+                      <span>Xóa Bản Nháp Thi Rác</span>
+                    </span>
+                    <span className="font-mono text-xs font-black text-purple-800 bg-purple-100 px-2 py-0.5 rounded">
+                      {stats.draftCount} nháp
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-purple-800/80 mt-1 leading-relaxed">
+                    Xóa các bản ghi "Bản nháp thi" sót lại do học sinh thoát dở hoặc rớt mạng khi thi.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={isProcessing}
+                  onClick={() => setConfirmAction('draft')}
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Dọn Dẹp Bản Nháp Rác</span>
+                </button>
+              </div>
+
               {/* Card Dọn Bài Thi Thử */}
               <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200 flex flex-col justify-between gap-3">
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-amber-900 flex items-center gap-1.5">
                       <Zap className="w-4 h-4 text-amber-600" />
-                      <span>Xóa toàn bộ Bài Thi Thử</span>
+                      <span>Xóa Bài Thi Thử</span>
                     </span>
                     <span className="font-mono text-xs font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
                       {stats.practiceCount} bài
@@ -315,7 +362,7 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-xs text-rose-900 flex items-center gap-1.5">
                       <Clock className="w-4 h-4 text-rose-600" />
-                      <span>Dọn dẹp bài thi cũ theo thời gian</span>
+                      <span>Dọn dẹp bài thi cũ</span>
                     </span>
                     <div className="flex items-center gap-1">
                       {[30, 60, 90].map((days) => (
@@ -335,8 +382,8 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
                     </div>
                   </div>
                   <p className="text-[11px] text-rose-800/80 mt-1 leading-relaxed">
-                    Xóa các bài thi làm cách đây hơn <strong>{retentionDays} ngày</strong> (
-                    {retentionDays === 30 ? stats.olderThan30 : retentionDays === 60 ? stats.olderThan60 : stats.olderThan90} bài phù hợp).
+                    Xóa các bài thi cách đây &gt;<strong>{retentionDays} ngày</strong> (
+                    {retentionDays === 30 ? stats.olderThan30 : retentionDays === 60 ? stats.olderThan60 : stats.olderThan90} bài).
                   </p>
                 </div>
 
@@ -350,7 +397,7 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
                   className="w-full py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Xóa Bài Cũ Hơn {retentionDays} Ngày</span>
+                  <span>Xóa Bài Cũ &gt; {retentionDays}N</span>
                 </button>
               </div>
 
@@ -448,7 +495,9 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
             <div className="text-center space-y-1.5">
               <h3 className="text-base font-bold text-slate-900">Xác Nhận Dọn Dẹp Dữ Liệu</h3>
               <p className="text-xs text-slate-600 leading-relaxed">
-                {confirmAction === 'practice'
+                {confirmAction === 'draft'
+                  ? 'Bạn có chắc chắn muốn xóa sạch toàn bộ các bản nháp bài thi còn sót lại trên Turso không? Thao tác này sẽ làm sạch bảng bài thi và không làm mất các bài thi đã nộp chính thức.'
+                  : confirmAction === 'practice'
                   ? `Bạn có chắc chắn muốn xóa toàn bộ ${stats.practiceCount} bài thi thử luyện tập không? Bạn nên tải file sao lưu trước khi xóa.`
                   : `Bạn có chắc chắn muốn xóa các bài thi làm cách đây hơn ${retentionDays} ngày không? Hành động này sẽ giải phóng dung lượng trên Turso.`}
               </p>
@@ -466,8 +515,16 @@ export const StorageOptimizationModal: React.FC<StorageOptimizationModalProps> =
               <button
                 type="button"
                 disabled={isProcessing}
-                onClick={confirmAction === 'practice' ? handlePurgePractice : handlePurgeOld}
-                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                onClick={
+                  confirmAction === 'draft' 
+                    ? handlePurgeDrafts 
+                    : confirmAction === 'practice' 
+                    ? handlePurgePractice 
+                    : handlePurgeOld
+                }
+                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5 ${
+                  confirmAction === 'draft' ? 'bg-purple-600 hover:bg-purple-700' : 'bg-rose-600 hover:bg-rose-700'
+                }`}
               >
                 {isProcessing ? (
                   <>

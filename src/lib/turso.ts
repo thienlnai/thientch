@@ -847,6 +847,8 @@ export async function testConnection(): Promise<boolean> {
     await turso.execute('SELECT 1');
     console.log('[Turso] Đã kết nối Turso Database thành công.');
     turso.execute(`ALTER TABLE users ADD COLUMN schoolIds TEXT DEFAULT '[]'`).catch(() => {});
+    // Tự động dọn dẹp triệt để các bản nháp thi (draft) cũ còn sót lại trong submissions
+    turso.execute(`DELETE FROM submissions WHERE id LIKE 'draft_%' OR examTitle = 'Bản nháp thi'`).catch(() => {});
     return true;
   } catch (err) {
     console.warn('[Turso] Không thể kết nối tới Turso:', err);

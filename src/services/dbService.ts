@@ -3517,11 +3517,34 @@ export async function submitExamBatch(data: ExamSubmission | Omit<ExamSubmission
 }
 
 /**
- * Auto-save đồng bộ ngầm bản nháp bài thi lên Turso sau mỗi 30 giây:
- * - Không chặn luồng thao tác của học sinh.
- * - Lưu bản nháp vào Turso để đảm bảo dữ liệu luôn an toàn.
+ * Dọn dẹp vĩnh viễn toàn bộ các bản nháp thi (draft) rác còn sót lại trên CSDL Turso
  */
-export async function autoSaveExamDraft(draft: {
+export async function purgeAllDraftSubmissions(): Promise<boolean> {
+  const config = getEffectiveTursoConfig();
+  if (config.isConfigured || isConfigured) {
+    try {
+      await tursoExecute(
+        `DELETE FROM "${SUBMISSIONS_TABLE}" WHERE id LIKE 'draft_%' OR examTitle = 'Bản nháp thi'`
+      );
+      localSubmissions = localSubmissions.filter(
+        (s) => !s.id.startsWith('draft_') && s.examTitle !== 'Bản nháp thi'
+      );
+      notifySubmissions();
+      return true;
+    } catch (err) {
+      console.warn('[Turso] Lỗi khi dọn dẹp bản nháp:', err);
+    }
+  }
+  return false;
+}
+
+/**
+ * Auto-save lưu bản nháp bài thi:
+ * - Lưu an toàn vào LocalStorage máy học sinh (không lo mất bài khi F5/rớt mạng).
+ * - TUYỆT ĐỐI KHÔNG GHI "Bản nháp thi" vào bảng submissions trên CSDL Turso,
+ *   giúp bảng submissions luôn sạch đẹp, chỉ chứa đúng các bài thi đã được nộp chính thức.
+ */
+export async function autoSaveExamDraft(_draft: {
   examId: string;
   studentId: string;
   studentName?: string;
@@ -3530,35 +3553,9 @@ export async function autoSaveExamDraft(draft: {
   answers: Record<string, any>;
   timeRemaining?: number;
 }): Promise<boolean> {
-  const draftId = `draft_${draft.examId}_${draft.studentId}`;
-  const config = getEffectiveTursoConfig();
-  if (config.isConfigured || isConfigured) {
-    try {
-      const statements = [
-        {
-          sql: `INSERT INTO "${SUBMISSIONS_TABLE}" (id, examId, examTitle, studentId, studentName, studentCode, classId, score, isPassed, studentAnswers, timeSpentSeconds, isTeacherTesting)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, 0)
-                ON CONFLICT(id) DO UPDATE SET studentAnswers = excluded.studentAnswers, timeSpentSeconds = excluded.timeSpentSeconds`,
-          args: [
-            draftId,
-            draft.examId,
-            'Bản nháp thi',
-            draft.studentId,
-            draft.studentName || 'Học sinh',
-            draft.studentCode || '',
-            draft.classId || '',
-            JSON.stringify(draft.answers || {}),
-            draft.timeRemaining !== undefined ? Math.max(0, draft.timeRemaining) : 0,
-          ],
-        },
-      ];
-      await tursoBatch(statements);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  return false;
+  // Bản nháp được lưu và bảo vệ 100% trên LocalStorage của học sinh
+  // Không ghi bản nháp rác lên CSDL Turso để bảo vệ CSDL
+  return true;
 }
 
 export const addExamSubmission = submitExamBatch;

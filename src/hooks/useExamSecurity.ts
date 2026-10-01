@@ -9,30 +9,68 @@ export interface ExamViolationLog {
 }
 
 export interface UseExamSecurityOptions {
+  studentId?: string;
+  studentName?: string;
+  studentCode?: string;
   examId?: string;
+  examTitle?: string;
   submissionId?: string;
   isTeacherTesting?: boolean;
+  enabled?: boolean;
   maxViolations?: number;
   onMaxViolationsExceeded?: () => void;
   onViolation?: (violation: ExamViolationLog) => void;
+  onViolationRecorded?: (type: string, label: string) => void;
 }
 
 export function useExamSecurity({
+  studentId,
+  studentName,
+  studentCode,
   examId,
+  examTitle,
   submissionId,
   isTeacherTesting = false,
+  enabled = true,
   maxViolations = 3,
   onMaxViolationsExceeded,
   onViolation,
+  onViolationRecorded,
 }: UseExamSecurityOptions = {}) {
   const [violationCount, setViolationCount] = useState<number>(0);
   const [violationLogs, setViolationLogs] = useState<ExamViolationLog[]>([]);
   const [isExamOpen, setIsExamOpen] = useState<boolean>(true);
+  const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [lockReason, setLockReason] = useState<string>('');
+  const [isTeacherUnlocked, setIsTeacherUnlocked] = useState<boolean>(false);
+  const [isChecking, setIsChecking] = useState<boolean>(false);
   const isFinishedRef = useRef<boolean>(false);
+
+  const reEnterFullscreen = useCallback(async () => {
+    try {
+      const el = document.documentElement as any;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+      if (req) {
+        await req.call(el);
+      }
+    } catch {}
+  }, []);
+
+  const manuallyCheckStatus = useCallback(async () => {
+    if (!examId) return;
+    setIsChecking(true);
+    try {
+      const res = await checkExamStatus(examId);
+      setIsExamOpen(res.isOpen);
+    } catch {}
+    finally {
+      setIsChecking(false);
+    }
+  }, [examId]);
 
   const recordViolation = useCallback(
     async (type: string, label: string) => {
-      if (isTeacherTesting || isFinishedRef.current) return;
+      if (!enabled || isTeacherTesting || isFinishedRef.current) return;
 
       const log: ExamViolationLog = {
         id: `v_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -44,8 +82,12 @@ export function useExamSecurity({
       setViolationLogs((prev) => [...prev, log]);
       setViolationCount((prev) => {
         const next = prev + 1;
-        if (next >= maxViolations && onMaxViolationsExceeded) {
-          onMaxViolationsExceeded();
+        if (next >= maxViolations) {
+          setIsLocked(true);
+          setLockReason(`Vi phạm an ninh quá ${maxViolations} lần: ${label}`);
+          if (onMaxViolationsExceeded) {
+            onMaxViolationsExceeded();
+          }
         }
         return next;
       });
@@ -53,12 +95,15 @@ export function useExamSecurity({
       if (onViolation) {
         onViolation(log);
       }
+      if (onViolationRecorded) {
+        onViolationRecorded(type, label);
+      }
 
       if (submissionId) {
         await reportExamViolation(submissionId, { type, label, time: log.time });
       }
     },
-    [isTeacherTesting, maxViolations, onMaxViolationsExceeded, onViolation, submissionId]
+    [enabled, isTeacherTesting, maxViolations, onMaxViolationsExceeded, onViolation, onViolationRecorded, submissionId]
   );
 
   // Kiểm tra trạng thái đề thi
@@ -154,6 +199,13 @@ export function useExamSecurity({
   }, [isTeacherTesting, recordViolation]);
 
   return {
+    isLocked,
+    lockReason,
+    isTeacherUnlocked,
+    isChecking,
+    reEnterFullscreen,
+    manuallyCheckStatus,
+    setIsLocked,
     violationCount,
     violationLogs,
     isExamOpen,

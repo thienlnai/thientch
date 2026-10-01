@@ -550,16 +550,22 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-xs font-bold shrink-0 self-start sm:self-center">
-                            {isCorrect && (
-                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/80 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
+                            {isCorrect && isStudentChosen && (
+                              <span className="text-emerald-800 flex items-center gap-1.5 bg-emerald-100/90 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                <span>Bạn đã chọn đúng ✓</span>
+                              </span>
+                            )}
+                            {isCorrect && !isStudentChosen && (
+                              <span className="text-emerald-700 flex items-center gap-1.5 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
                                 <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span>Đáp án đúng</span>
                               </span>
                             )}
                             {isStudentChosen && !isCorrect && (
-                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/80 px-2.5 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
+                              <span className="text-rose-700 flex items-center gap-1.5 bg-rose-100/90 px-2.5 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
                                 <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                <span>Bạn đã chọn sai</span>
+                                <span>Bạn đã chọn sai ✕</span>
                               </span>
                             )}
                           </div>
@@ -569,87 +575,242 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                   </div>
                 )}
 
-                {/* 2. MULTIPLE CHOICE */}
-                {currentQ.type === 'multiple_choice' && currentQ.options && (
-                  <div className="space-y-2.5">
-                    {currentQ.options.map((opt, oIdx) => {
-                      const charLabel = String.fromCharCode(65 + oIdx);
-                      const chosenIds: string[] = submission.studentAnswers[currentQ.id] || [];
-                      const isStudentChosen = chosenIds.includes(opt.id);
-                      const isCorrect = (currentQ.correctOptionIds || []).includes(opt.id);
+                {/* 2. MULTIPLE CHOICE (TRẮC NGHIỆM NHIỀU ĐÁP ÁN) */}
+                {currentQ.type === 'multiple_choice' && currentQ.options && (() => {
+                  const chosenIds: string[] = Array.isArray(submission.studentAnswers[currentQ.id])
+                    ? submission.studentAnswers[currentQ.id]
+                    : [];
+                  const correctIds: string[] = currentQ.correctOptionIds || [];
 
-                      let rowClass = 'bg-white border-slate-200 text-slate-700 hover:border-slate-300';
-                      if (isCorrect) {
-                        rowClass = 'bg-gradient-to-r from-emerald-50 to-teal-50/60 border-2 border-emerald-400 text-emerald-950 font-bold shadow-xs';
-                      } else if (isStudentChosen && !isCorrect) {
-                        rowClass = 'bg-gradient-to-r from-rose-50 to-red-50/60 border-2 border-rose-400 text-rose-950 font-semibold shadow-xs';
-                      }
+                  const allOptsMapped = (currentQ.options || []).map((opt, idx) => ({
+                    ...opt,
+                    charLabel: String.fromCharCode(65 + idx),
+                  }));
 
-                      return (
-                        <div
-                          key={opt.id}
-                          className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-transform hover:translate-x-0.5 ${rowClass}`}
-                        >
-                          <div className="flex items-start gap-3.5 flex-1 min-w-0">
-                            <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 sm:mt-0 ${
-                              isCorrect 
-                                ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs' 
-                                : isStudentChosen 
-                                ? 'bg-rose-600 text-white border-rose-600 shadow-xs' 
-                                : 'bg-slate-100 text-slate-700 border-slate-200'
-                            }`}>
-                              {charLabel}
-                            </span>
-                            <div className="flex-1 min-w-0 space-y-2">
-                              {opt.text && (
-                                <div className="text-sm sm:text-base font-medium leading-relaxed break-words">
-                                  {opt.text}
-                                </div>
-                              )}
-                              {opt.imageUrl && (
-                                <div
-                                  onClick={(e) =>
-                                    handleOpenLightbox(
-                                      e,
-                                      opt.imageUrl!,
-                                      `Đáp án ${charLabel}${opt.text ? ': ' + opt.text : ''}`
-                                    )
-                                  }
-                                  className="group/optimg relative inline-block cursor-zoom-in max-w-full"
-                                  title="Nhấp để phóng to hình ảnh đáp án"
-                                >
-                                  <img
-                                    src={opt.imageUrl}
-                                    alt={`Đáp án ${charLabel}`}
-                                    className="max-h-40 sm:max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs transition-all duration-200 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-400 group-hover/optimg:shadow-md"
-                                  />
-                                  <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
-                                    <ZoomIn className="w-3 h-3" />
-                                    <span>Phóng to</span>
-                                  </div>
-                                </div>
-                              )}
+                  const correctOpts = allOptsMapped.filter((o) => correctIds.includes(o.id));
+                  const chosenOpts = allOptsMapped.filter((o) => chosenIds.includes(o.id));
+                  const missingCorrectOpts = allOptsMapped.filter((o) => correctIds.includes(o.id) && !chosenIds.includes(o.id));
+                  const wrongChosenOpts = allOptsMapped.filter((o) => chosenIds.includes(o.id) && !correctIds.includes(o.id));
+
+                  const isAllCorrect = correctIds.length > 0 &&
+                    chosenIds.length === correctIds.length &&
+                    chosenIds.every((id) => correctIds.includes(id));
+
+                  const isUnderSelected = !isAllCorrect &&
+                    wrongChosenOpts.length === 0 &&
+                    chosenOpts.length > 0 &&
+                    chosenOpts.length < correctOpts.length;
+
+                  const hasWrongSelections = wrongChosenOpts.length > 0;
+                  const hasNoSelections = chosenIds.length === 0;
+
+                  return (
+                    <div className="space-y-3.5">
+                      {/* BANNER GIẢI THÍCH CHI TIẾT LÝ DO ĐÚNG / SAI CỦA HỌC SINH */}
+                      {isAllCorrect ? (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50/50 to-emerald-50 border-2 border-emerald-300 text-emerald-950 flex items-start gap-3 shadow-xs">
+                          <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                            <CheckCircle2 className="w-5 h-5" />
+                          </div>
+                          <div className="text-xs sm:text-sm space-y-1">
+                            <div className="font-black text-emerald-950 text-sm">
+                              Chính xác tuyệt đối! (+{qResult?.earnedScore || 0}đ)
+                            </div>
+                            <p className="text-emerald-800 text-xs font-medium leading-relaxed">
+                              Bạn đã chọn đủ và đúng toàn bộ <strong>{correctOpts.length} đáp án</strong>: <strong className="font-black">[{correctOpts.map((o) => o.charLabel).join(', ')}]</strong>.
+                            </p>
+                          </div>
+                        </div>
+                      ) : isUnderSelected ? (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-orange-50/60 to-amber-50 border-2 border-amber-400 text-amber-950 flex items-start gap-3.5 shadow-sm">
+                          <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                            <AlertTriangle className="w-5 h-5" />
+                          </div>
+                          <div className="text-xs sm:text-sm space-y-2 flex-1">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-black text-amber-950 text-sm tracking-tight">
+                                LÝ DO CHƯA ĐẠT ĐIỂM: BẠN ĐÃ CHỌN THIẾU ĐÁP ÁN!
+                              </span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-200/90 text-amber-900 font-black text-[11px] font-mono border border-amber-300">
+                                Thiếu {missingCorrectOpts.length} đáp án đúng
+                              </span>
+                            </div>
+
+                            <div className="text-xs text-amber-950 space-y-1.5 leading-relaxed bg-white/85 p-3 rounded-xl border border-amber-200">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>• Đề bài yêu cầu chọn đủ</span>
+                                <strong className="text-emerald-800 font-bold">{correctOpts.length} đáp án đúng</strong>:
+                                <span className="inline-flex gap-1 font-mono font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                                  [{correctOpts.map((o) => o.charLabel).join(', ')}]
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>• Bạn mới chỉ chọn</span>
+                                <strong className="text-blue-800 font-bold">{chosenOpts.length}/{correctOpts.length} đáp án</strong>:
+                                <span className="inline-flex gap-1 font-mono font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-lg border border-blue-300">
+                                  [{chosenOpts.map((o) => o.charLabel).join(', ')}]
+                                </span>
+                                <span className="text-emerald-700 font-semibold">(Các đáp án này bạn chọn đúng)</span>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-wrap text-rose-900">
+                                <span>• ⚠️ Bạn bị</span>
+                                <strong className="font-black underline">bỏ sót {missingCorrectOpts.length} đáp án đúng</strong>:
+                                <span className="inline-flex gap-1 font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-300">
+                                  [{missingCorrectOpts.map((o) => o.charLabel).join(', ')}]
+                                </span>
+                                <span className="text-xs italic font-medium">(Xem ô có viền nét đứt màu cam bên dưới)</span>
+                              </div>
+                            </div>
+
+                            <div className="text-[11px] text-amber-900 font-medium italic">
+                              * Quy định trắc nghiệm nhiều đáp án: Thí sinh cần chọn đủ và chính xác tất cả các đáp án đúng của câu hỏi thì mới được tính điểm.
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 text-xs font-bold shrink-0 self-start sm:self-center">
-                            {isCorrect && (
-                              <span className="text-emerald-700 flex items-center gap-1 bg-emerald-100/80 px-2.5 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
-                                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                                <span>Đáp án đúng</span>
-                              </span>
-                            )}
-                            {isStudentChosen && !isCorrect && (
-                              <span className="text-rose-700 flex items-center gap-1 bg-rose-100/80 px-2.5 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
-                                <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                                <span>Bạn chọn sai</span>
-                              </span>
-                            )}
+                        </div>
+                      ) : hasWrongSelections ? (
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-red-50/50 to-rose-50 border-2 border-rose-300 text-rose-950 flex items-start gap-3.5 shadow-sm">
+                          <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs mt-0.5">
+                            <XCircle className="w-5 h-5" />
+                          </div>
+                          <div className="text-xs sm:text-sm space-y-2 flex-1">
+                            <div className="font-black text-rose-950 text-sm tracking-tight">
+                              LÝ DO CHƯA ĐẠT ĐIỂM: BẠN ĐÃ CHỌN PHẢI ĐÁP ÁN SAI!
+                            </div>
+                            <div className="text-xs text-rose-950 space-y-1.5 leading-relaxed bg-white/85 p-3 rounded-xl border border-rose-200">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>• Bạn đã chọn nhầm đáp án sai:</span>
+                                <span className="inline-flex gap-1 font-mono font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-lg border border-rose-300">
+                                  [{wrongChosenOpts.map((o) => o.charLabel).join(', ')}]
+                                </span>
+                              </div>
+                              {missingCorrectOpts.length > 0 && (
+                                <div className="flex items-center gap-1.5 flex-wrap text-amber-900">
+                                  <span>• Đồng thời bạn bỏ sót đáp án đúng:</span>
+                                  <span className="inline-flex gap-1 font-mono font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300">
+                                    [{missingCorrectOpts.map((o) => o.charLabel).join(', ')}]
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span>• Bộ đáp án đúng đầy đủ là:</span>
+                                <span className="inline-flex gap-1 font-mono font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-lg border border-emerald-300">
+                                  [{correctOpts.map((o) => o.charLabel).join(', ')}]
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ) : hasNoSelections ? (
+                        <div className="p-3.5 rounded-2xl bg-slate-100 border border-slate-300 text-slate-800 flex items-start gap-3 shadow-2xs">
+                          <HelpCircle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+                          <div className="text-xs sm:text-sm">
+                            <div className="font-bold text-slate-900">Bạn chưa chọn đáp án nào cho câu hỏi này.</div>
+                            <div className="text-xs text-slate-600 mt-1">
+                              Đáp án đúng gồm {correctOpts.length} đáp án: <strong className="text-emerald-700 font-bold">[{correctOpts.map((o) => o.charLabel).join(', ')}]</strong>.
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {/* DANH SÁCH LỰA CHỌN CỦA CÂU HỎI */}
+                      <div className="space-y-2.5">
+                        {allOptsMapped.map((opt) => {
+                          const charLabel = opt.charLabel;
+                          const isStudentChosen = chosenIds.includes(opt.id);
+                          const isCorrect = correctIds.includes(opt.id);
+
+                          let rowClass = 'bg-white border-slate-200 text-slate-700 hover:border-slate-300';
+                          if (isCorrect && isStudentChosen) {
+                            rowClass = 'bg-gradient-to-r from-emerald-50 to-teal-50/70 border-2 border-emerald-500 text-emerald-950 font-bold shadow-xs';
+                          } else if (isCorrect && !isStudentChosen) {
+                            rowClass = 'bg-gradient-to-r from-amber-50/90 via-orange-50/60 to-amber-50/80 border-2 border-dashed border-amber-500 text-amber-950 font-bold shadow-xs';
+                          } else if (isStudentChosen && !isCorrect) {
+                            rowClass = 'bg-gradient-to-r from-rose-50 to-red-50/70 border-2 border-rose-400 text-rose-950 font-semibold shadow-xs';
+                          } else {
+                            rowClass = 'bg-white border border-slate-200 text-slate-500 opacity-80 hover:opacity-100';
+                          }
+
+                          return (
+                            <div
+                              key={opt.id}
+                              className={`p-3.5 sm:p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 transition-transform hover:translate-x-0.5 ${rowClass}`}
+                            >
+                              <div className="flex items-start gap-3.5 flex-1 min-w-0">
+                                <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 border mt-0.5 sm:mt-0 ${
+                                  isCorrect && isStudentChosen
+                                    ? 'bg-emerald-600 text-white border-emerald-600 shadow-xs'
+                                    : isCorrect && !isStudentChosen
+                                    ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                                    : isStudentChosen
+                                    ? 'bg-rose-600 text-white border-rose-600 shadow-xs'
+                                    : 'bg-slate-100 text-slate-700 border-slate-200'
+                                }`}>
+                                  {charLabel}
+                                </span>
+                                <div className="flex-1 min-w-0 space-y-2">
+                                  {opt.text && (
+                                    <div className="text-sm sm:text-base font-medium leading-relaxed break-words">
+                                      {opt.text}
+                                    </div>
+                                  )}
+                                  {opt.imageUrl && (
+                                    <div
+                                      onClick={(e) =>
+                                        handleOpenLightbox(
+                                          e,
+                                          opt.imageUrl!,
+                                          `Đáp án ${charLabel}${opt.text ? ': ' + opt.text : ''}`
+                                        )
+                                      }
+                                      className="group/optimg relative inline-block cursor-zoom-in max-w-full"
+                                      title="Nhấp để phóng to hình ảnh đáp án"
+                                    >
+                                      <img
+                                        src={opt.imageUrl}
+                                        alt={`Đáp án ${charLabel}`}
+                                        className="max-h-40 sm:max-h-48 object-contain rounded-xl border border-slate-200 bg-white p-1.5 shadow-xs transition-all duration-200 group-hover/optimg:ring-2 group-hover/optimg:ring-indigo-400 group-hover/optimg:shadow-md"
+                                      />
+                                      <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-900/85 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md opacity-0 group-hover/optimg:opacity-100 transition-opacity pointer-events-none backdrop-blur-xs">
+                                        <ZoomIn className="w-3 h-3" />
+                                        <span>Phóng to</span>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-xs font-bold shrink-0 self-start sm:self-center">
+                                {isCorrect && isStudentChosen && (
+                                  <span className="text-emerald-800 flex items-center gap-1.5 bg-emerald-100/90 px-3 py-1.5 rounded-xl border border-emerald-300 shadow-2xs">
+                                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                                    <span>Bạn đã chọn đúng ✓</span>
+                                  </span>
+                                )}
+                                {isCorrect && !isStudentChosen && (
+                                  <span className="text-amber-900 flex items-center gap-1.5 bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-400 shadow-2xs font-extrabold">
+                                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                                    <span>Đáp án đúng (Bạn bỏ sót)</span>
+                                  </span>
+                                )}
+                                {isStudentChosen && !isCorrect && (
+                                  <span className="text-rose-800 flex items-center gap-1.5 bg-rose-100/90 px-3 py-1.5 rounded-xl border border-rose-300 shadow-2xs">
+                                    <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                                    <span>Bạn đã chọn sai ✕</span>
+                                  </span>
+                                )}
+                                {!isCorrect && !isStudentChosen && (
+                                  <span className="text-slate-400 text-[11px] font-medium px-2 py-1 bg-slate-50 rounded-lg border border-slate-100">
+                                    Không chọn
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* 3. MATCHING */}
                 {currentQ.type === 'matching' && currentQ.matchingPairs && (
