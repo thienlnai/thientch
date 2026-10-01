@@ -3578,6 +3578,7 @@ NOTIFY pgrst, 'reload schema';`;
           assignedClasses={assignedClasses}
           teacherId={teacher.id}
           teacherName={teacher.fullName || teacher.username}
+          teacherSubjects={teacher.subjects}
           onSave={async (examData) => {
             if (editingExamId) {
               await updateExam(editingExamId, examData);

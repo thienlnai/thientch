@@ -61,11 +61,21 @@ import {
   formatGradeLabel 
 } from '../utils/studentHelper.ts';
 
+export const DEFAULT_IC3_SUBJECTS = [
+  'IC3 GS6 Spark Level 1',
+  'IC3 GS6 Spark Level 2',
+  'IC3 GS6 Spark Level 3',
+  'IC3 GS6 Level 1',
+  'IC3 GS6 Level 2',
+  'IC3 GS6 Level 3',
+] as const;
+
 interface ExamEditorModalProps {
   initialExam?: Exam | null;
   assignedClasses: SchoolClass[];
   teacherId: string;
   teacherName: string;
+  teacherSubjects?: string;
   onSave: (examData: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
 }
@@ -75,12 +85,52 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
   assignedClasses,
   teacherId,
   teacherName,
+  teacherSubjects,
   onSave,
   onClose,
 }) => {
   // General Exam Info
   const [title, setTitle] = useState(initialExam?.title || '');
-  const [subject, setSubject] = useState(initialExam?.subject || 'Công nghệ Thông tin');
+  
+  // Danh sách các môn học khác đã có (từ đề cũ hoặc môn giáo viên dạy)
+  const otherKnownSubjects = useMemo(() => {
+    const list: string[] = [];
+    if (initialExam?.subject) {
+      const trimmed = initialExam.subject.trim();
+      if (!DEFAULT_IC3_SUBJECTS.includes(trimmed as any) && !list.includes(trimmed)) {
+        list.push(trimmed);
+      }
+    }
+    if (teacherSubjects) {
+      const splitSubs = teacherSubjects.split(',').map((s) => s.trim()).filter(Boolean);
+      splitSubs.forEach((s) => {
+        if (!DEFAULT_IC3_SUBJECTS.includes(s as any) && !list.includes(s)) {
+          list.push(s);
+        }
+      });
+    }
+    return list;
+  }, [initialExam?.subject, teacherSubjects]);
+
+  const [selectedSubjectOption, setSelectedSubjectOption] = useState<string>(() => {
+    if (initialExam?.subject) {
+      const trimmed = initialExam.subject.trim();
+      if (DEFAULT_IC3_SUBJECTS.includes(trimmed as any)) {
+        return trimmed;
+      }
+      return trimmed; // Nằm trong otherKnownSubjects
+    }
+    return DEFAULT_IC3_SUBJECTS[0]; // Mặc định 'IC3 GS6 Spark Level 1'
+  });
+
+  const [customSubjectText, setCustomSubjectText] = useState<string>('');
+
+  const subject = useMemo(() => {
+    if (selectedSubjectOption === '__custom__') {
+      return customSubjectText.trim() || 'Môn học khác';
+    }
+    return selectedSubjectOption;
+  }, [selectedSubjectOption, customSubjectText]);
   
   // Khối lớp được phép thấy đề thi khi học sinh đăng nhập (Requirement: Nguyễn Văn A Lớp 8.1 sẽ không thấy đề của khối 6 và 7)
   const [targetGrades, setTargetGrades] = useState<string[]>(() => {
@@ -446,6 +496,11 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
       setShowSettings(true);
       return;
     }
+    if (selectedSubjectOption === '__custom__' && !customSubjectText.trim()) {
+      setErrorMsg('Vui lòng nhập tên môn học khác cho đề thi!');
+      setShowSettings(true);
+      return;
+    }
     if (assignedClasses.length > 0 && classIds.length === 0) {
       setErrorMsg('Vui lòng phân công ít nhất một lớp học được thi!');
       setShowSettings(true);
@@ -503,7 +558,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
 
       await onSave({
         title: title.trim(),
-        subject: subject.trim() || 'Công nghệ Thông tin',
+        subject: subject.trim() || 'IC3 GS6 Spark Level 1',
         grade: finalGradeDisplay,
         targetGrades: targetGrades,
         creatorId: teacherId,
@@ -706,16 +761,66 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                 {/* Môn học, Thời gian làm bài */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      Môn Học
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Môn Học</span>
+                      </span>
+                      {selectedSubjectOption === '__custom__' && (
+                        <span className="text-[10px] text-indigo-700 font-bold bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">
+                          Môn học tự nhập
+                        </span>
+                      )}
                     </label>
-                    <input
-                      type="text"
-                      value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      placeholder="Công nghệ Thông tin"
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold"
-                    />
+                    <select
+                      value={selectedSubjectOption}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSelectedSubjectOption(val);
+                        if (val !== '__custom__') {
+                          setCustomSubjectText('');
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                    >
+                      <optgroup label="Danh mục chuẩn IC3 GS6">
+                        {DEFAULT_IC3_SUBJECTS.map((s) => (
+                          <option key={s} value={s}>
+                            {s}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {otherKnownSubjects.length > 0 && (
+                        <optgroup label="Môn học khác đã có">
+                          {otherKnownSubjects.map((s) => (
+                            <option key={s} value={s}>
+                              {s}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      <optgroup label="Tùy chỉnh môn học">
+                        <option value="__custom__">➕ Thêm môn học khác (Tự nhập môn giáo viên dạy)...</option>
+                      </optgroup>
+                    </select>
+
+                    {/* Trường nhập môn học tự do khi chọn 'Thêm môn học khác' */}
+                    {selectedSubjectOption === '__custom__' && (
+                      <div className="mt-2 animate-in fade-in slide-in-from-top-1">
+                        <input
+                          type="text"
+                          value={customSubjectText}
+                          onChange={(e) => setCustomSubjectText(e.target.value)}
+                          placeholder="Nhập tên môn học (Ví dụ: Tin học lớp 8, Lập trình Python, Công nghệ...)"
+                          className="w-full px-3.5 py-2 rounded-xl border border-indigo-300 bg-indigo-50/50 text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
+                          autoFocus
+                          required
+                        />
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Đề thi sẽ được tạo với môn học do bạn vừa nhập.
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
