@@ -82,12 +82,8 @@ export function useExamSecurity({
       setViolationLogs((prev) => [...prev, log]);
       setViolationCount((prev) => {
         const next = prev + 1;
-        if (next >= maxViolations) {
-          setIsLocked(true);
-          setLockReason(`Vi phạm an ninh quá ${maxViolations} lần: ${label}`);
-          if (onMaxViolationsExceeded) {
-            onMaxViolationsExceeded();
-          }
+        if (next >= maxViolations && onMaxViolationsExceeded) {
+          onMaxViolationsExceeded();
         }
         return next;
       });

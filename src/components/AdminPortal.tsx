@@ -4401,6 +4401,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       {submissionToReview && (
         <ExamReviewModal
           submission={submissionToReview}
+          allSubmissions={submissions}
           exams={exams}
           onClose={() => setSubmissionToReview(null)}
           onDelete={(sub) => {

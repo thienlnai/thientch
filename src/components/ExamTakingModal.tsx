@@ -146,7 +146,6 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
-  const [showFullscreenRequiredModal, setShowFullscreenRequiredModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<ExamSubmission | null>(null);
 
@@ -226,15 +225,8 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     setShowViolationWarning(true);
   };
 
-  // ================= HOOK BẢO MẬT PHÒNG THI TỐI ƯU ROW READ TURSO =================
-  const {
-    isLocked: isExamLocked,
-    lockReason: examLockReason,
-    isTeacherUnlocked,
-    isChecking: isCheckingSecurity,
-    reEnterFullscreen: reEnterFullscreenSecure,
-    manuallyCheckStatus: manuallyCheckSecurityStatus,
-  } = useExamSecurity({
+  // Hook bảo mật phòng thi (ghi nhận vi phạm cục bộ, không khóa cứng màn hình)
+  useExamSecurity({
     studentId: currentUser.id,
     studentName: 'fullName' in currentUser ? (currentUser as any).fullName : (currentUser as any).username,
     studentCode: 'studentCode' in currentUser ? (currentUser as any).studentCode : '',
@@ -246,35 +238,46 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     },
   });
 
+  const SYSTEM_LOCKED_KEYS = [
+    'Escape',
+    'AltLeft',
+    'AltRight',
+    'Tab',
+    'MetaLeft',
+    'MetaRight',
+    'KeyD',
+    'F4',
+    'F11',
+    'F12',
+    'F5',
+    'KeyR',
+    'KeyW',
+    'KeyT',
+    'KeyN',
+    'KeyP',
+    'KeyS',
+    'KeyC',
+    'KeyV',
+    'KeyX',
+    'KeyU'
+  ];
+
   // ================= 1. KÍCH HOẠT CHẾ ĐỘ TOÀN MÀN HÌNH & KHÓA BÀN PHÍM =================
   const enterFullscreen = async () => {
     try {
+      const el = document.documentElement as any;
       if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
-        } else if ((document.documentElement as any).webkitRequestFullscreen) {
-          await (document.documentElement as any).webkitRequestFullscreen();
+        const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (req) {
+          await req.call(el);
         }
       }
       setIsFullscreen(true);
-      setShowFullscreenRequiredModal(false);
 
-      // Khóa các phím hệ thống nguy hiểm qua Keyboard Lock API (Chromium)
+      // Khóa các phím hệ thống nguy hiểm qua Keyboard Lock API (Chromium / Chrome / Edge / Cốc Cốc)
       if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
         try {
-          await (navigator as any).keyboard.lock([
-            'Escape',
-            'AltLeft',
-            'AltRight',
-            'Tab',
-            'MetaLeft',
-            'MetaRight',
-            'KeyD',
-            'F4',
-            'F11',
-            'F5',
-            'KeyR'
-          ]);
+          await (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS);
         } catch {
           // Bỏ qua nếu môi trường không cấp quyền keyboard lock
         }
@@ -291,9 +294,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     const handleFullscreenChange = () => {
       const isFull = !!document.fullscreenElement || !!(document as any).webkitFullscreenElement;
       setIsFullscreen(isFull);
-      if (!isFull && !isFinishedRef.current && !isTeacherTesting) {
-        recordViolation('fullscreen_exit', 'Thoát khỏi chế độ toàn màn hình trước khi nộp bài');
-        setShowFullscreenRequiredModal(true);
+      if (isFull && 'keyboard' in navigator && (navigator as any).keyboard?.lock) {
+        try {
+          (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS).catch(() => {});
+        } catch {}
       }
     };
 
@@ -456,9 +460,22 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       }
     };
 
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const code = e.code || '';
+      if (
+        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' ||
+        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight'
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
     window.addEventListener('contextmenu', handleContextMenu);
     window.addEventListener('selectstart', handleSelectStart);
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('copy', handleClipboard);
     window.addEventListener('paste', handleClipboard);
     window.addEventListener('cut', handleClipboard);
@@ -469,6 +486,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       window.removeEventListener('contextmenu', handleContextMenu);
       window.removeEventListener('selectstart', handleSelectStart);
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('copy', handleClipboard);
       window.removeEventListener('paste', handleClipboard);
       window.removeEventListener('cut', handleClipboard);
@@ -767,6 +785,20 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
 
       setSubmissionResult(submission);
       setShowConfirmSubmit(false);
+      isFinishedRef.current = true;
+
+      // Nhả khóa bàn phím và thoát toàn màn hình sau khi nộp bài
+      if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
+        try {
+          (navigator as any).keyboard.unlock();
+        } catch {}
+      }
+      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+        try {
+          const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
+          if (exitFs) exitFs.call(document).catch(() => {});
+        } catch {}
+      }
     } catch (err: any) {
       console.error('Lỗi nộp bài thi:', err);
       isFinishedRef.current = false;
@@ -812,96 +844,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         }}
       />
 
-      {/* ================= MODAL KHÓA PHÒNG THI AN TOÀN (OPTIMIZED TURSO ZERO POLLING) ================= */}
-      {(showFullscreenRequiredModal || isExamLocked) && !isTeacherTesting && !submissionResult && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-in fade-in zoom-in-95">
-          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-6 sm:p-8 text-slate-900 border-2 border-slate-200 text-center relative overflow-hidden">
-            {/* Top Indicator bar */}
-            <div className={`absolute top-0 left-0 right-0 h-2 ${isTeacherUnlocked ? 'bg-emerald-600' : 'bg-red-600 animate-pulse'}`} />
-
-            {isTeacherUnlocked ? (
-              /* TRẠNG THÁI: GIÁO VIÊN ĐÃ MỞ KHÓA */
-              <div className="space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto border border-emerald-200 shadow-sm animate-bounce">
-                  <CheckCircle2 className="w-9 h-9" />
-                </div>
-
-                <span className="inline-block px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  ✓ Quyền Thi Đã Được Phê Duyệt
-                </span>
-
-                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  Giáo Viên Đã Mở Khóa Phòng Thi!
-                </h3>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Giáo viên giám thị đã cấp quyền cho phép bạn tiếp tục làm bài thi. Vui lòng bấm nút bên dưới để quay lại <strong>chế độ Toàn Màn Hình</strong> và hoàn thành bài thi.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await reEnterFullscreenSecure();
-                    await enterFullscreen();
-                  }}
-                  className="mt-4 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Maximize className="w-4 h-4" />
-                  <span>Vào Lại Toàn Màn Hình & Tiếp Tục Làm Bài</span>
-                </button>
-              </div>
-            ) : (
-              /* TRẠNG THÁI: BỊ KHÓA VÌ VI PHẠM */
-              <div className="space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-sm animate-pulse">
-                  <ShieldAlert className="w-9 h-9" />
-                </div>
-
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                  <span>VI PHẠM: THOÁT MÀN HÌNH CHƯA ĐƯỢC PHÉP</span>
-                </div>
-
-                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  Phòng Thi Đang Bị Khóa An Toàn!
-                </h3>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {examLockReason || 'Hệ thống phát hiện thao tác rời khỏi chế độ Toàn Màn Hình (nhấn ESC) hoặc chuyển sang cửa sổ/ứng dụng khác mà chưa được phép.'}
-                </p>
-
-                {/* Status Box */}
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                    <span>Đang chờ giáo viên cấp quyền mở khóa (Thăm dò 5 giây/lần)...</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={manuallyCheckSecurityStatus}
-                    disabled={isCheckingSecurity}
-                    className="flex-1 py-3 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-95 text-slate-700 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingSecurity ? 'animate-spin' : ''}`} />
-                    <span>{isCheckingSecurity ? 'Đang kiểm tra...' : 'Kiểm tra lệnh mở khóa ngay'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await reEnterFullscreenSecure();
-                      await enterFullscreen();
-                    }}
-                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Maximize className="w-3.5 h-3.5" />
-                    <span>Thử vào lại Fullscreen</span>
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* ================= MODAL BẮT BUỘC TOÀN MÀN HÌNH ĐỂ ẨN THANH CÔNG CỤ TRÌNH DUYỆT ================= */}
+      {!isFullscreen && !submissionResult && !isTeacherTesting && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-in fade-in zoom-in-95">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 text-center shadow-2xl border-2 border-indigo-500 relative overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
+            <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto mb-4 border border-indigo-200 shadow-sm animate-bounce">
+              <Maximize className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight mb-2">
+              Chế Độ Thi Toàn Màn Hình
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
+              Hệ thống yêu cầu chuyển sang <strong>Toàn Màn Hình</strong> để ẩn thanh công cụ trình duyệt web và chống phím tắt cho đến khi bạn bấm <strong>Nộp bài</strong>.
+            </p>
+            <button
+              type="button"
+              onClick={enterFullscreen}
+              className="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <Maximize className="w-4 h-4" />
+              <span>Bật Toàn Màn Hình & Tiếp Tục Làm Bài</span>
+            </button>
           </div>
         </div>
       )}

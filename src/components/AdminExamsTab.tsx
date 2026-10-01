@@ -116,11 +116,25 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
   const [examToViewQuestions, setExamToViewQuestions] = useState<Exam | null>(null);
 
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [mergeSubjectFilter, setMergeSubjectFilter] = useState<string>('all');
   const [mergeSelectedIds, setMergeSelectedIds] = useState<string[]>([]);
   const [mergeNewTitle, setMergeNewTitle] = useState('');
   const [mergeDuration, setMergeDuration] = useState<number>(60);
   const [mergeTargetClassIds, setMergeTargetClassIds] = useState<string[]>([]);
   const [isMerging, setIsMerging] = useState(false);
+
+  const mergeAvailableSubjects = useMemo(() => {
+    const set = new Set<string>();
+    exams.forEach((e) => {
+      if (e.subject) set.add(e.subject.trim());
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [exams]);
+
+  const mergeFilteredExams = useMemo(() => {
+    if (!mergeSubjectFilter || mergeSubjectFilter === 'all') return exams;
+    return exams.filter((e) => e.subject?.trim() === mergeSubjectFilter);
+  }, [exams, mergeSubjectFilter]);
 
   const [examToPrint, setExamToPrint] = useState<Exam | null>(null);
   const [printIncludeAnswers, setPrintIncludeAnswers] = useState(false);
@@ -394,6 +408,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
     setIsMerging(true);
     try {
       const sourceExams = exams.filter((e) => mergeSelectedIds.includes(e.id));
+      const targetSubject = mergeSubjectFilter !== 'all' ? mergeSubjectFilter : sourceExams[0]?.subject;
       await mergeExams(
         sourceExams,
         mergeNewTitle.trim(),
@@ -402,7 +417,8 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
         currentUser.fullName || currentUser.username,
         mergeTargetClassIds,
         false,
-        0
+        0,
+        targetSubject
       );
       showToast(`Đã gộp thành công ${sourceExams.length} đề thi thành "${mergeNewTitle}"!`);
       setIsMergeModalOpen(false);
@@ -1550,11 +1566,62 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
               </div>
 
               <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Chọn các đề thi nguồn cần gộp (Chọn ít nhất 2 đề):
+                <label className="block font-bold text-slate-800 mb-1 flex items-center justify-between">
+                  <span>Chọn môn học để lọc đề thi</span>
+                  <span className="text-[11px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full">
+                    {mergeFilteredExams.length} đề thi
+                  </span>
                 </label>
+                <select
+                  value={mergeSubjectFilter}
+                  onChange={(e) => setMergeSubjectFilter(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-white focus:ring-2 focus:ring-purple-500 cursor-pointer"
+                >
+                  <option value="all">-- Tất cả môn học ({exams.length} đề thi) --</option>
+                  {mergeAvailableSubjects.map((sub) => {
+                    const count = exams.filter((ex) => ex.subject?.trim() === sub).length;
+                    return (
+                      <option key={sub} value={sub}>
+                        Môn: {sub} ({count} đề thi)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="font-bold text-slate-800">
+                    Chọn các đề thi nguồn cần gộp (Đã chọn: <span className="text-purple-600 font-mono font-bold">{mergeSelectedIds.length}</span>):
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idsToAdd = mergeFilteredExams.map((e) => e.id);
+                        const mergedSet = new Set([...mergeSelectedIds, ...idsToAdd]);
+                        setMergeSelectedIds(Array.from(mergedSet));
+                      }}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                    >
+                      Chọn tất cả ({mergeFilteredExams.length})
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idsToRemove = new Set(mergeFilteredExams.map((e) => e.id));
+                        setMergeSelectedIds(mergeSelectedIds.filter((id) => !idsToRemove.has(id)));
+                      }}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
                 <div className="max-h-48 overflow-y-auto space-y-1.5 border border-slate-200 rounded-xl p-2 bg-slate-50">
-                  {exams.map((ex) => {
+                  {mergeFilteredExams.map((ex) => {
                     const isChecked = mergeSelectedIds.includes(ex.id);
                     return (
                       <label
@@ -1577,11 +1644,16 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                           <span className="truncate">{ex.title}</span>
                         </div>
                         <span className="text-[10px] text-slate-500 shrink-0 font-mono ml-2">
-                          {ex.questions?.length || ex.totalQuestions || 0} câu • {ex.creatorName}
+                          {ex.subject ? `[${ex.subject}] ` : ''}{ex.questions?.length || ex.totalQuestions || 0} câu • {ex.creatorName}
                         </span>
                       </label>
                     );
                   })}
+                  {mergeFilteredExams.length === 0 && (
+                    <div className="py-6 text-center text-slate-400 text-xs">
+                      Không có đề thi nào thuộc môn "{mergeSubjectFilter}".
+                    </div>
+                  )}
                 </div>
               </div>
 

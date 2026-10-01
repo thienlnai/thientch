@@ -27,15 +27,31 @@ interface ExamReviewModalProps {
   onDelete?: (submission: ExamSubmission) => void;
   exam?: Exam;
   exams?: Exam[];
+  allSubmissions?: ExamSubmission[];
 }
 
 export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
-  submission,
+  submission: initialSubmission,
   onClose,
   onDelete,
   exam,
   exams,
+  allSubmissions,
 }) => {
+  const [submission, setSubmission] = useState<ExamSubmission>(initialSubmission);
+
+  useEffect(() => {
+    setSubmission(initialSubmission);
+  }, [initialSubmission]);
+
+  // Danh sách tất cả các lần đã làm của đề thi này
+  const relatedAttempts = useMemo(() => {
+    if (!allSubmissions || allSubmissions.length === 0) return [];
+    return allSubmissions
+      .filter((s) => s.examId === submission.examId && s.studentId === submission.studentId)
+      .sort((a, b) => (a.attemptNumber || 0) - (b.attemptNumber || 0));
+  }, [allSubmissions, submission.examId, submission.studentId]);
+
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [loadedExam, setLoadedExam] = useState<Exam | null>(null);
@@ -159,10 +175,44 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                   <span>Thời gian: {Math.floor(submission.timeSpentSeconds / 60)}p {submission.timeSpentSeconds % 60}s</span>
                 </span>
                 <span className="text-slate-300 hidden sm:inline">|</span>
-                <span className="text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200 font-medium">
+                <span className="text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200 font-bold text-indigo-700">
                   Lần thi #{submission.attemptNumber}
                 </span>
               </div>
+
+              {/* BỘ CHỌN LẦN LÀM BÀI ĐỂ HIỂN THỊ TẤT CẢ SỐ LẦN ĐÃ LÀM CỦA ĐỀ THI */}
+              {relatedAttempts.length > 1 && (
+                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-100 flex-wrap animate-in fade-in">
+                  <span className="text-[11px] font-black text-indigo-700 uppercase tracking-wider">
+                    Các lần đã làm ({relatedAttempts.length} lần):
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {relatedAttempts.map((att) => {
+                      const isSelected = att.id === submission.id;
+                      return (
+                        <button
+                          key={att.id}
+                          type="button"
+                          onClick={() => {
+                            setSubmission(att);
+                            setSelectedQuestionIndex(0);
+                          }}
+                          className={`px-3 py-1 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          <span>Lần #{att.attemptNumber}</span>
+                          <span className={`text-[10px] font-semibold ${isSelected ? 'text-indigo-200' : 'text-slate-500'}`}>
+                            • {att.score}đ {att.isPassed ? '✓' : '✕'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

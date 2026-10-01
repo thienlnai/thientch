@@ -372,10 +372,28 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
 
   // Modal Gộp đề thi (Merge Exams)
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [mergeSelectedSubject, setMergeSelectedSubject] = useState<string>('all');
   const [mergeSelectedExamIds, setMergeSelectedExamIds] = useState<string[]>([]);
   const [mergeNewTitle, setMergeNewTitle] = useState('');
   const [mergeDuration, setMergeDuration] = useState<number>(60);
   const [isMerging, setIsMerging] = useState(false);
+
+  // Danh sách các môn học có sẵn từ đề thi của giáo viên
+  const mergeAvailableSubjects = useMemo(() => {
+    const set = new Set<string>();
+    teacherExams.forEach((e) => {
+      if (e.subject) set.add(e.subject.trim());
+    });
+    return Array.from(set).filter(Boolean).sort();
+  }, [teacherExams]);
+
+  // Danh sách đề thi được lọc theo môn học đã chọn
+  const mergeFilteredExams = useMemo(() => {
+    if (!mergeSelectedSubject || mergeSelectedSubject === 'all') {
+      return teacherExams;
+    }
+    return teacherExams.filter((e) => e.subject?.trim() === mergeSelectedSubject);
+  }, [teacherExams, mergeSelectedSubject]);
 
   // Modal Xóa đề thi
   const [examToDelete, setExamToDelete] = useState<Exam | null>(null);
@@ -941,6 +959,7 @@ NOTIFY pgrst, 'reload schema';`;
     setIsMerging(true);
     try {
       const selectedSourceExams = exams.filter((e) => mergeSelectedExamIds.includes(e.id));
+      const targetSubject = mergeSelectedSubject !== 'all' ? mergeSelectedSubject : selectedSourceExams[0]?.subject;
       await mergeExams(
         selectedSourceExams,
         mergeNewTitle.trim(),
@@ -949,7 +968,8 @@ NOTIFY pgrst, 'reload schema';`;
         teacher.fullName || teacher.username,
         assignedClasses.map((c) => c.id),
         false,
-        0
+        0,
+        targetSubject
       );
       showToast(`Đã gộp thành công ${selectedSourceExams.length} đề thi thành "${mergeNewTitle}"!`);
       setIsMergeModalOpen(false);
@@ -3609,7 +3629,32 @@ NOTIFY pgrst, 'reload schema';`;
 
               <div className="p-2.5 bg-purple-50/80 rounded-xl border border-purple-200 flex items-center gap-2 text-[11px] text-purple-900 font-medium">
                 <Layers className="w-4 h-4 text-purple-600 shrink-0" />
-                <span>⚡ <strong>Tối ưu hóa tham chiếu:</strong> Chỉ lưu thông tin đề mới và danh sách mã câu hỏi tham chiếu. Câu hỏi từ các đề nguồn được tái sử dụng an toàn, siêu nhanh.</span>
+                <span>⚡ <strong>Tối ưu hóa Turso DB:</strong> Tái sử dụng trực tiếp các câu hỏi gốc từ các đề đã chọn. Hoàn toàn <strong>không tạo thêm câu hỏi mới</strong> trong cơ sở dữ liệu Turso.</span>
+              </div>
+
+              {/* BỘ CHỌN MÔN HỌC ĐỂ LỌC ĐỀ THI GỘP */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>Chọn Môn Học Để Lọc Đề Thi Gộp</span>
+                  <span className="text-[11px] font-bold text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded-full">
+                    {mergeFilteredExams.length} đề thi
+                  </span>
+                </label>
+                <select
+                  value={mergeSelectedSubject}
+                  onChange={(e) => setMergeSelectedSubject(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold text-slate-800 bg-slate-50/70 focus:bg-white focus:ring-2 focus:ring-purple-500 focus:outline-none transition-all cursor-pointer"
+                >
+                  <option value="all">-- Tất Cả Các Môn Học ({teacherExams.length} đề thi) --</option>
+                  {mergeAvailableSubjects.map((sub) => {
+                    const count = teacherExams.filter((ex) => ex.subject?.trim() === sub).length;
+                    return (
+                      <option key={sub} value={sub}>
+                        Môn: {sub} ({count} đề thi)
+                      </option>
+                    );
+                  })}
+                </select>
               </div>
 
               <div>
@@ -3640,19 +3685,46 @@ NOTIFY pgrst, 'reload schema';`;
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Chọn Các Đề Thi Cần Gộp (Đã chọn: {mergeSelectedExamIds.length})
-                </label>
-                <div className="max-h-48 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-2.5">
-                  {teacherExams.map((ex) => {
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="font-bold text-slate-700">
+                    Chọn Các Đề Thi Cần Gộp (Đã chọn: <span className="text-purple-600 font-mono font-bold">{mergeSelectedExamIds.length}</span>)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idsToAdd = mergeFilteredExams.map((e) => e.id);
+                        const mergedSet = new Set([...mergeSelectedExamIds, ...idsToAdd]);
+                        setMergeSelectedExamIds(Array.from(mergedSet));
+                      }}
+                      className="text-[11px] font-bold text-purple-600 hover:text-purple-700 hover:underline cursor-pointer"
+                    >
+                      Chọn tất cả ({mergeFilteredExams.length})
+                    </button>
+                    <span className="text-slate-300">|</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const idsToRemove = new Set(mergeFilteredExams.map((e) => e.id));
+                        setMergeSelectedExamIds(mergeSelectedExamIds.filter((id) => !idsToRemove.has(id)));
+                      }}
+                      className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:underline cursor-pointer"
+                    >
+                      Bỏ chọn
+                    </button>
+                  </div>
+                </div>
+
+                <div className="max-h-52 overflow-y-auto space-y-2 border border-slate-200 rounded-2xl p-2.5 bg-slate-50/30">
+                  {mergeFilteredExams.map((ex) => {
                     const isChecked = mergeSelectedExamIds.includes(ex.id);
                     return (
                       <label
                         key={ex.id}
                         className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-colors ${
                           isChecked
-                            ? 'bg-purple-50 border-purple-300 text-purple-950 font-bold'
-                            : 'hover:bg-slate-50 border-slate-200 text-slate-700'
+                            ? 'bg-purple-50 border-purple-300 text-purple-950 font-bold shadow-xs'
+                            : 'hover:bg-slate-50 border-slate-200 text-slate-700 bg-white'
                         }`}
                       >
                         <input
@@ -3665,17 +3737,26 @@ NOTIFY pgrst, 'reload schema';`;
                               setMergeSelectedExamIds(mergeSelectedExamIds.filter((id) => id !== ex.id));
                             }
                           }}
-                          className="w-4 h-4 text-purple-600 rounded"
+                          className="w-4 h-4 text-purple-600 rounded cursor-pointer"
                         />
-                        <div className="flex-1">
-                          <div className="text-xs">{ex.title}</div>
-                          <div className="text-[10px] text-slate-400 font-normal">
-                            {ex.questions?.length || 0} câu • {ex.durationMinutes} phút
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs truncate">{ex.title}</div>
+                          <div className="text-[10px] text-slate-400 font-normal flex items-center gap-2 mt-0.5">
+                            <span className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-medium">{ex.subject || 'Công nghệ'}</span>
+                            <span>•</span>
+                            <span>{ex.questions?.length || ex.totalQuestions || 0} câu</span>
+                            <span>•</span>
+                            <span>{ex.durationMinutes} phút</span>
                           </div>
                         </div>
                       </label>
                     );
                   })}
+                  {mergeFilteredExams.length === 0 && (
+                    <div className="py-8 text-center text-slate-400 text-xs">
+                      Không có đề thi nào thuộc môn "{mergeSelectedSubject}". Vui lòng chọn môn khác.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -3755,6 +3836,7 @@ NOTIFY pgrst, 'reload schema';`;
       {submissionToReview && (
         <ExamReviewModal
           submission={submissionToReview}
+          allSubmissions={submissions}
           exams={exams}
           onClose={() => setSubmissionToReview(null)}
           onDelete={(sub) => {

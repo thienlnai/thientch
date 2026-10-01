@@ -1772,6 +1772,7 @@ export async function getExamWithQuestions(examId: string, forceRefresh = false)
         e.passingScore AS e_passingScore, e.status AS e_status, 
         e.allowReviewAnswers AS e_allowReviewAnswers, e.isPracticeTest AS e_isPracticeTest, 
         e.practiceRandomCount AS e_practiceRandomCount, e.totalQuestions AS e_totalQuestions,
+        e.questionIds AS e_questionIds,
         e.createdAt AS e_createdAt, e.updatedAt AS e_updatedAt,
         q.id AS q_id, q.examId AS q_examId, q.orderIndex AS q_orderIndex, q.type AS q_type, 
         q.title AS q_title, q.mediaType AS q_mediaType, q.mediaUrl AS q_mediaUrl, 
@@ -1859,6 +1860,22 @@ export async function getExamWithQuestions(examId: string, forceRefresh = false)
           createdAt: r.q_createdAt || baseExam.createdAt,
           updatedAt: r.q_updatedAt || baseExam.updatedAt,
         });
+      }
+    }
+
+    if (questions.length === 0) {
+      const qIds: string[] = parseJson(first.e_questionIds, []);
+      if (qIds.length > 0) {
+        for (const ex of localExams) {
+          if (ex.questions) {
+            for (const q of ex.questions) {
+              if (qIds.includes(q.id) && !seenQIds.has(q.id)) {
+                seenQIds.add(q.id);
+                questions.push(q);
+              }
+            }
+          }
+        }
       }
     }
 
@@ -3366,25 +3383,28 @@ export async function mergeExams(
   creatorName?: string,
   classIds?: string[],
   isPracticeTest?: boolean,
-  practiceRandomCount?: number
+  practiceRandomCount?: number,
+  selectedSubject?: string
 ): Promise<Exam> {
   const sourceExams: Exam[] =
     Array.isArray(sourceExamsOrIds) && sourceExamsOrIds.length > 0 && typeof sourceExamsOrIds[0] === 'object'
       ? (sourceExamsOrIds as Exam[])
       : localExams.filter((e) => (sourceExamsOrIds as string[]).includes(e.id));
 
+  // Tái sử dụng nguyên vẹn các câu hỏi gốc từ đề nguồn - KHÔNG tạo ID mới, KHÔNG tạo bản ghi mới trong Turso
   const mergedQuestions: ExamQuestion[] = [];
-  const seenQTitles = new Set<string>();
+  const seenQIds = new Set<string>();
 
   for (const ex of sourceExams) {
     if (ex.questions) {
       for (const q of ex.questions) {
-        if (!seenQTitles.has(q.title)) {
-          seenQTitles.add(q.title);
-          mergedQuestions.push({
-            ...q,
-            id: `q_merged_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-          });
+        const cleanId = String(q.id || '').trim();
+        if (cleanId && !seenQIds.has(cleanId)) {
+          seenQIds.add(cleanId);
+          mergedQuestions.push(q);
+        } else if (!cleanId && !seenQIds.has(q.title)) {
+          seenQIds.add(q.title);
+          mergedQuestions.push(q);
         }
       }
     }
@@ -3395,7 +3415,7 @@ export async function mergeExams(
       ? classIds
       : Array.from(new Set(sourceExams.flatMap((e) => e.classIds || [])));
 
-  const primarySubject = sourceExams[0]?.subject || 'Công nghệ Thông tin';
+  const primarySubject = selectedSubject || sourceExams[0]?.subject || 'Công nghệ Thông tin';
   const primaryGrade = sourceExams[0]?.grade || 'Khối 12';
 
   let actualDuration = 45;
@@ -3409,9 +3429,14 @@ export async function mergeExams(
     actualCreatorName = durationOrCreator.fullName || durationOrCreator.username;
   }
 
-  return await addExam({
+  const now = new Date().toISOString();
+  const examId = `exam_merged_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const questionIds = mergedQuestions.map((q) => q.id);
+
+  const newExam: Exam = {
+    id: examId,
     title: newTitle,
-    description: `Đề thi tổng hợp từ ${sourceExams.length} đề thi khác nhau.`,
+    description: `Đề thi gộp từ ${sourceExams.length} đề thi môn ${primarySubject}. Tái sử dụng ${mergedQuestions.length} câu hỏi gốc (0 row mới trong Turso).`,
     subject: primarySubject,
     grade: primaryGrade,
     creatorId: actualCreatorId,
@@ -3424,8 +3449,34 @@ export async function mergeExams(
     allowReviewAnswers: true,
     isPracticeTest: Boolean(isPracticeTest),
     practiceRandomCount: practiceRandomCount || 0,
+    totalQuestions: mergedQuestions.length,
+    questionIds,
     questions: mergedQuestions,
-  });
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  // 1. Cập nhật In-Memory & LocalStorage cache
+  localExams = sortByCreatedAt([newExam, ...localExams]);
+  examMemoryCache.set(examId, { exam: newExam, timestamp: Date.now() });
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`thientch_exam_cache_${examId}`, JSON.stringify({ exam: newExam, timestamp: Date.now() }));
+    }
+  } catch {}
+
+  notifyExams();
+
+  // 2. Chỉ lưu bản ghi đề thi mới vào bảng exams (CHỈ 1 BẢN GHI ĐỀ, KHÔNG THÊM CÂU HỎI MỚI VÀO TURSO)
+  if (isConfigured) {
+    try {
+      await safeDbUpsert(EXAMS_TABLE, newExam);
+    } catch (e) {
+      console.warn('Lưu đề thi gộp vào Turso thất bại:', e);
+    }
+  }
+
+  return newExam;
 }
 
 // ================= CRUD: SUBMISSIONS (100% TURSO DATABASE) =================

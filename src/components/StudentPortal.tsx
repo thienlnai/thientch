@@ -33,7 +33,6 @@ import {
   Maximize
 } from 'lucide-react';
 import { addExamSubmission, getExamWithQuestions } from '../services/dbService.ts';
-import { useExamSecurity } from '../hooks/useExamSecurity.ts';
 import { 
   isExamVisibleToGrade, 
   getClassGradeNumber, 
@@ -83,69 +82,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     setTimeout(() => setToastMsg(null), 4000);
   };
 
-  // ================= BẢO MẬT & GIÁM SÁT CHỐNG THOÁT MÀN HÌNH TẠI GIAO DIỆN HỌC SINH =================
-  // Theo dõi trạng thái toàn màn hình
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
-    return Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement);
-  });
-
-  useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement || (document as any).webkitFullscreenElement));
-    };
-    document.addEventListener('fullscreenchange', handleFsChange);
-    document.addEventListener('webkitfullscreenchange', handleFsChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', handleFsChange);
-      document.removeEventListener('webkitfullscreenchange', handleFsChange);
-    };
-  }, []);
-
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  // Hook bảo mật phòng thi & giám sát thoát màn hình tại Giao diện Học sinh
-  const {
-    isLocked: isPortalLocked,
-    lockReason: portalLockReason,
-    isTeacherUnlocked: isPortalTeacherUnlocked,
-    isChecking: isCheckingPortalSecurity,
-    reEnterFullscreen: reEnterPortalFullscreen,
-    manuallyCheckStatus: checkPortalSecurityStatus,
-    setIsLocked: setPortalLocked
-  } = useExamSecurity({
-    studentId: student.id,
-    studentName: student.fullName,
-    studentCode: student.studentCode,
-    examId: '',
-    examTitle: 'Giao Diện Học Sinh',
-    enabled: !takingExam && !isLoggingOut,
-    onViolationRecorded: (type, reason) => {
-      console.warn(`[Giao diện Học sinh] Vi phạm an ninh: ${type} - ${reason}`);
-    }
-  });
-
-  const requestPortalFullscreen = async () => {
-    try {
-      const el = document.documentElement as any;
-      const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-      if (req) {
-        await req.call(el);
-        setIsFullscreen(true);
-      }
-    } catch (err) {
-      console.warn('Lỗi bật toàn màn hình tại Cổng Học sinh:', err);
-    }
-  };
-
-  const handlePortalLogout = async () => {
-    setIsLoggingOut(true);
-    try {
-      if (document.fullscreenElement) {
-        await document.exitFullscreen();
-      }
-    } catch (e) {
-      // ignore
-    }
+  const handlePortalLogout = () => {
     onLogout();
   };
 
@@ -272,13 +209,43 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
     );
   }, [availableExams, searchQuery]);
 
-  // Bộ lọc bài thi đã nộp theo ngày
+  // Bộ lọc bài thi theo đề thi đã chọn (hiển thị tất cả số lần đã làm của đề thi đó)
+  const [selectedExamIdFilter, setSelectedExamIdFilter] = useState<string>('all');
+
+  // Danh sách các đề thi mà học sinh đã từng làm
+  const attemptedExamsList = useMemo(() => {
+    const map = new Map<string, { examId: string; examTitle: string; count: number; bestScore: number; latestScore: number }>();
+    studentSubmissions.forEach((sub) => {
+      const existing = map.get(sub.examId);
+      if (existing) {
+        existing.count += 1;
+        existing.bestScore = Math.max(existing.bestScore, sub.score);
+      } else {
+        map.set(sub.examId, {
+          examId: sub.examId,
+          examTitle: sub.examTitle || 'Đề thi',
+          count: 1,
+          bestScore: sub.score,
+          latestScore: sub.score,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [studentSubmissions]);
+
+  const selectedFilteredExamInfo = useMemo(() => {
+    if (!selectedExamIdFilter || selectedExamIdFilter === 'all') return null;
+    return attemptedExamsList.find((e) => e.examId === selectedExamIdFilter) || null;
+  }, [selectedExamIdFilter, attemptedExamsList]);
+
+  // Bộ lọc bài thi đã nộp theo ngày & theo đề thi đã chọn
   const filteredSubmissions = useMemo(() => {
     return studentSubmissions.filter((sub) => {
       if (selectedStatsDate && sub.dateKey !== selectedStatsDate) return false;
+      if (selectedExamIdFilter && selectedExamIdFilter !== 'all' && sub.examId !== selectedExamIdFilter) return false;
       return true;
     });
-  }, [studentSubmissions, selectedStatsDate]);
+  }, [studentSubmissions, selectedStatsDate, selectedExamIdFilter]);
 
   // Phân trang danh sách bài thi và kết quả bài làm (10 dòng/trang)
   const [examsPage, setExamsPage] = useState<number>(1);
@@ -601,7 +568,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           {/* ================= TAB 2: KẾT QUẢ & XEM LẠI ĐÁP ÁN (Requirement B.2) ================= */}
           {activeTab === 'results' && (
             <div className="space-y-6">
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div>
                   <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
                     <Award className="w-5 h-5 text-emerald-600" />
@@ -612,26 +579,100 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                   </p>
                 </div>
 
-                {/* Bộ lọc ngày */}
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-slate-400" />
-                  <input
-                    type="date"
-                    value={selectedStatsDate}
-                    onChange={(e) => setSelectedStatsDate(e.target.value)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-300 bg-slate-50 text-xs font-semibold"
-                  />
-                  {selectedStatsDate && (
+                {/* Bộ lọc bài thi & ngày */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  {/* BỘ LỌC CHỌN BÀI THI ĐỂ HIỂN THỊ TẤT CẢ SỐ LẦN ĐÃ LÀM */}
+                  <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-300">
+                    <BookOpen className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <select
+                      value={selectedExamIdFilter}
+                      onChange={(e) => {
+                        setSelectedExamIdFilter(e.target.value);
+                        setResultsPage(1);
+                      }}
+                      className="bg-transparent text-xs font-bold text-slate-800 focus:outline-none cursor-pointer max-w-[260px] truncate"
+                    >
+                      <option value="all">-- Tất cả đề thi đã làm ({studentSubmissions.length} lượt) --</option>
+                      {attemptedExamsList.map((item) => (
+                        <option key={item.examId} value={item.examId}>
+                          {item.examTitle} ({item.count} lần làm)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Bộ lọc ngày */}
+                  <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-300">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    <input
+                      type="date"
+                      value={selectedStatsDate}
+                      onChange={(e) => {
+                        setSelectedStatsDate(e.target.value);
+                        setResultsPage(1);
+                      }}
+                      className="bg-transparent text-xs font-semibold focus:outline-none"
+                    />
+                  </div>
+
+                  {(selectedStatsDate || selectedExamIdFilter !== 'all') && (
                     <button
                       type="button"
-                      onClick={() => setSelectedStatsDate('')}
-                      className="text-xs text-emerald-700 font-bold hover:underline"
+                      onClick={() => {
+                        setSelectedStatsDate('');
+                        setSelectedExamIdFilter('all');
+                        setResultsPage(1);
+                      }}
+                      className="text-xs text-indigo-600 hover:text-indigo-800 font-bold hover:underline cursor-pointer px-1.5 py-1"
                     >
-                      Tất cả
+                      Đặt lại
                     </button>
                   )}
                 </div>
               </div>
+
+              {/* BANNER THỐNG KÊ CHI TIẾT TẤT CẢ SỐ LẦN LÀM CỦA ĐỀ ĐANG CHỌN */}
+              {selectedFilteredExamInfo && (
+                <div className="bg-gradient-to-r from-indigo-50/90 via-purple-50/90 to-indigo-50/90 border border-indigo-200 rounded-3xl p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-md shadow-indigo-600/20 shrink-0">
+                      <BookOpen className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="text-[11px] font-black uppercase tracking-wider text-indigo-700">
+                        Chi Tiết Lịch Sử Làm Bài Của Đề Thi
+                      </div>
+                      <h4 className="text-base font-black text-slate-900 leading-tight">
+                        {selectedFilteredExamInfo.examTitle}
+                      </h4>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        Hiển thị toàn bộ <strong>{selectedFilteredExamInfo.count} lần</strong> bạn đã hoàn thành bài thi này.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 sm:border-l sm:border-indigo-200 sm:pl-5 shrink-0">
+                    <div className="text-center px-2">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tổng Số Lần</div>
+                      <div className="text-xl font-black font-mono text-indigo-600">
+                        {selectedFilteredExamInfo.count} lần
+                      </div>
+                    </div>
+                    <div className="text-center px-2">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Điểm Cao Nhất</div>
+                      <div className="text-xl font-black font-mono text-emerald-600">
+                        {selectedFilteredExamInfo.bestScore} / 1000
+                      </div>
+                    </div>
+                    <div className="text-center px-2">
+                      <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Lần Gần Nhất</div>
+                      <div className="text-xl font-black font-mono text-slate-800">
+                        {selectedFilteredExamInfo.latestScore} / 1000
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Bảng kết quả bài làm */}
               <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
@@ -798,124 +839,10 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
       {reviewingSubmission && (
         <ExamReviewModal
           submission={reviewingSubmission}
+          allSubmissions={studentSubmissions}
           exams={exams}
           onClose={() => setReviewingSubmission(null)}
         />
-      )}
-
-      {/* ================= BANNER / MODAL YÊU CẦU BẬT TOÀN MÀN HÌNH ================= */}
-      {!isFullscreen && !isPortalLocked && !takingExam && !isLoggingOut && (
-        <div className="fixed bottom-5 right-5 z-40 bg-slate-900/95 text-white backdrop-blur-md p-4 rounded-3xl shadow-2xl border border-slate-700 flex items-center justify-between gap-4 max-w-md animate-in slide-in-from-bottom-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md">
-              <Maximize className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-slate-100">Chế Độ Toàn Màn Hình Khảo Thí</p>
-              <p className="text-[11px] text-slate-400">Yêu cầu bật toàn màn hình để đảm bảo an ninh phòng thi</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={requestPortalFullscreen}
-            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 active:scale-95 text-white font-black text-xs shadow-md shadow-indigo-600/30 transition-all shrink-0 cursor-pointer"
-          >
-            Bật Ngay
-          </button>
-        </div>
-      )}
-
-      {/* ================= MODAL KHÓA MÀN HÌNH DO VI PHẠM THOÁT MÀN HÌNH TẠI GIAO DIỆN HỌC SINH ================= */}
-      {isPortalLocked && !takingExam && (
-        <div className="fixed inset-0 z-[100] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full text-center shadow-2xl border-2 border-red-500 animate-in zoom-in-95 duration-200">
-            {isPortalTeacherUnlocked ? (
-              /* TRẠNG THÁI: GIÁO VIÊN ĐÃ MỞ KHÓA */
-              <div className="space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto border border-emerald-200 shadow-sm animate-bounce">
-                  <CheckCircle2 className="w-9 h-9" />
-                </div>
-
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-600" />
-                  <span>GIÁO VIÊN ĐÃ CẤP QUYỀN MỞ KHÓA!</span>
-                </div>
-
-                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  Bạn Đã Được Phép Tiếp Tục!
-                </h3>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  Giáo viên đã phê duyệt mở khóa phiên làm việc. Hãy nhấn nút bên dưới để quay lại chế độ Toàn Màn Hình và tiếp tục học tập, làm bài thi.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await reEnterPortalFullscreen();
-                    await requestPortalFullscreen();
-                    setPortalLocked(false);
-                  }}
-                  className="mt-4 w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-emerald-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Maximize className="w-4 h-4" />
-                  <span>Vào Lại Toàn Màn Hình & Tiếp Tục</span>
-                </button>
-              </div>
-            ) : (
-              /* TRẠNG THÁI: BỊ KHÓA VÌ VI PHẠM THOÁT MÀN HÌNH */
-              <div className="space-y-4">
-                <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto border border-red-200 shadow-sm animate-pulse">
-                  <ShieldAlert className="w-9 h-9" />
-                </div>
-
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200 animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-red-600 animate-ping" />
-                  <span>VI PHẠM: THOÁT MÀN HÌNH CHƯA ĐƯỢC PHÉP</span>
-                </div>
-
-                <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                  Giao Diện Học Sinh Đang Bị Khóa An Toàn!
-                </h3>
-
-                <p className="text-xs text-slate-600 leading-relaxed">
-                  {portalLockReason || 'Hệ thống phát hiện thao tác rời khỏi chế độ Toàn Màn Hình (nhấn ESC) hoặc chuyển sang cửa sổ/ứng dụng khác mà chưa được Giáo Viên cho phép.'}
-                </p>
-
-                {/* Status Box */}
-                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-left">
-                  <div className="flex items-center gap-2 text-xs text-slate-600">
-                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping shrink-0" />
-                    <span>Đang chờ giáo viên cấp quyền mở khóa (Thăm dò 5 giây/lần)...</span>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                  <button
-                    type="button"
-                    onClick={checkPortalSecurityStatus}
-                    disabled={isCheckingPortalSecurity}
-                    className="flex-1 py-3 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-95 text-slate-700 font-bold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isCheckingPortalSecurity ? 'animate-spin' : ''}`} />
-                    <span>{isCheckingPortalSecurity ? 'Đang kiểm tra...' : 'Kiểm tra lệnh mở khóa ngay'}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await reEnterPortalFullscreen();
-                      await requestPortalFullscreen();
-                    }}
-                    className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Maximize className="w-3.5 h-3.5" />
-                    <span>Thử vào lại Fullscreen</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
     </div>
   );

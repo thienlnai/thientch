@@ -74,24 +74,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    // =========================================================================
-    // YÊU CẦU 1: GỌI NGAY document.documentElement.requestFullscreen() ĐỂ LẤY
-    // QUYỀN TƯƠNG TÁC (USER GESTURE) CỦA TRÌNH DUYỆT TRƯỚC KHI AWAIT API ĐĂNG NHẬP
-    // =========================================================================
-    try {
-      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
-        const el = document.documentElement as any;
-        const reqFs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
-        if (reqFs) {
-          await reqFs.call(el).catch((fsErr: any) => {
-            console.warn('Yêu cầu Fullscreen bị trình duyệt từ chối hoặc cần tương tác:', fsErr);
-          });
-        }
-      }
-    } catch (fsErr) {
-      console.warn('Lỗi requestFullscreen khởi đầu:', fsErr);
-    }
-
     setIsSubmitting(true);
 
     // Giả lập await API Đăng nhập xác thực với Turso / Users collection
@@ -128,14 +110,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         localStorage.removeItem('thientch_remembered_username');
       }
 
-      // Xử lý kết quả: Admin -> Thoát Fullscreen và chuyển hướng
-      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-        try {
-          const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
-          if (exitFs) await exitFs.call(document).catch(() => {});
-        } catch {}
-      }
-
       setIsSubmitting(false);
       onLoginSuccess('admin', adminAccount, rememberMe);
       return;
@@ -159,9 +133,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (matchedUser.status === 'suspended') {
         setErrorMsg(t.errorAccountSuspended);
         setIsSubmitting(false);
-        if (document.fullscreenElement) {
-          try { document.exitFullscreen().catch(() => {}); } catch {}
-        }
         return;
       }
 
@@ -169,16 +140,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         localStorage.setItem('thientch_remembered_username', cleanUsername);
       } else {
         localStorage.removeItem('thientch_remembered_username');
-      }
-
-      // Xử lý kết quả: Nếu role === 'admin' hoặc role === 'teacher' -> lập tức thoát Fullscreen
-      if (matchedUser.role === 'admin' || matchedUser.role === 'teacher') {
-        if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-          try {
-            const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
-            if (exitFs) await exitFs.call(document).catch(() => {});
-          } catch {}
-        }
       }
 
       setIsSubmitting(false);
@@ -198,9 +159,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (matchedStudent.status === 'suspended') {
         setErrorMsg(t.errorAccountSuspended);
         setIsSubmitting(false);
-        if (document.fullscreenElement) {
-          try { document.exitFullscreen().catch(() => {}); } catch {}
-        }
         return;
       }
 
@@ -210,18 +168,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         localStorage.removeItem('thientch_remembered_username');
       }
 
-      // Xử lý kết quả: Nếu role === 'student' -> GIỮ NGUYÊN Fullscreen và khởi chạy làm bài thi
       setIsSubmitting(false);
       onLoginSuccess('student', matchedStudent, rememberMe);
       return;
-    }
-
-    // 4. Fallback: Invalid Credentials -> Thoát fullscreen nếu đã lỡ request
-    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-      try {
-        const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
-        if (exitFs) await exitFs.call(document).catch(() => {});
-      } catch {}
     }
 
     setErrorMsg(t.errorInvalidCredentials);
