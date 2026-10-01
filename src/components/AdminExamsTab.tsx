@@ -1077,6 +1077,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
           assignedClasses={classes} // Admin có toàn quyền gán cho bất kỳ lớp nào
           teacherId={editingExam ? editingExam.creatorId : currentUser.id}
           teacherName={editingExam ? editingExam.creatorName : (currentUser.fullName || currentUser.username)}
+          existingSubjects={Array.from(new Set(exams.map((e) => e.subject?.trim()).filter(Boolean)))}
           onSave={handleSaveExamFromModal}
           onClose={() => {
             setIsEditorOpen(false);

@@ -416,7 +416,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                 {paginatedExams.map((ex) => {
                   const stats = getExamAttemptStatsForDate(ex.id);
                   const isAttempted = stats.attemptCount > 0;
-                  const isPassed = stats.highestScore >= 950;
+                  const isPassed = stats.highestScore >= (ex.passingScore ?? 950);
 
                   return (
                     <div
@@ -719,7 +719,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                           <td className="py-3.5 px-4 text-center">
                             {sub.isPassed ? (
                               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
-                                ✓ ĐẠT (≥950đ)
+                                ✓ ĐẠT ({exams.find((e) => e.id === sub.examId)?.passingScore ? `≥${exams.find((e) => e.id === sub.examId)?.passingScore}đ` : '≥950đ'})
                               </span>
                             ) : (
                               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 text-red-800">

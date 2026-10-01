@@ -736,7 +736,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     }
 
     const timeSpentSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
-    const scoreResult = calculateExamScore(shuffledQuestions, answers);
+    const scoreResult = calculateExamScore(shuffledQuestions, answers, exam.passingScore, exam.totalScore);
 
     // Xác định thông tin thí sinh
     const isStudentUser = 'studentCode' in currentUser;
@@ -757,8 +757,8 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       studentCode,
       classId,
       score: scoreResult.totalScore,
-      maxScore: 1000,
-      isPassed: scoreResult.isPassed, // >= 950 điểm
+      maxScore: scoreResult.maxScore || exam.totalScore || 1000,
+      isPassed: scoreResult.isPassed, // >= exam.passingScore
       submittedAt: now.toISOString(),
       dateKey,
       timeSpentSeconds,
@@ -1113,7 +1113,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                 {submissionResult.isPassed ? 'CHÚC MỪNG BẠN ĐÃ ĐẠT!' : 'BÀI THI CHƯA ĐẠT CHUẨN'}
               </h2>
               <p className="text-xs text-white/90 mt-1">
-                Điểm chuẩn khảo thí: <strong>950 / 1000 điểm</strong>
+                Điểm chuẩn khảo thí: <strong>{exam.passingScore ?? 950} / {exam.totalScore ?? 1000} điểm</strong>
               </p>
             </div>
 
@@ -1128,16 +1128,16 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   }`}
                 >
                   {submissionResult.score}{' '}
-                  <span className="text-xl text-slate-400 font-normal">/ 1000</span>
+                  <span className="text-xl text-slate-400 font-normal">/ {exam.totalScore ?? 1000}</span>
                 </div>
                 <div className="inline-block px-3 py-1 rounded-full text-xs font-bold font-mono">
                   {submissionResult.isPassed ? (
                     <span className="text-emerald-700 bg-emerald-100 px-3 py-1 rounded-full">
-                      ✓ ĐẠT CHUẨN CHỨNG CHỈ (≥ 950đ)
+                      ✓ ĐẠT CHUẨN (≥ {exam.passingScore ?? 950}đ)
                     </span>
                   ) : (
                     <span className="text-red-700 bg-red-100 px-3 py-1 rounded-full">
-                      ✕ CHƯA ĐẠT CHUẨN (&lt; 950đ)
+                      ✕ CHƯA ĐẠT CHUẨN (&lt; {exam.passingScore ?? 950}đ)
                     </span>
                   )}
                 </div>
@@ -1208,7 +1208,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                 {exam.subject || 'Công nghệ Thông tin'}
               </span>
               <span className="px-2 py-0.5 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 font-semibold hidden sm:inline">
-                Thang điểm: 1000đ • Đạt: ≥ 950đ
+                Thang điểm: {exam.totalScore ?? 1000}đ • Đạt: ≥ {exam.passingScore ?? 950}đ
               </span>
               {'fullName' in currentUser && (
                 <span className="px-2 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 font-medium hidden md:inline">
@@ -1317,8 +1317,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   <span className="px-3 py-1 rounded-md bg-[#1E3A8A] text-white font-bold text-xs tracking-wider shadow-2xs">
                     CÂU HỎI {currentIndex + 1} / {totalQuestions}
                   </span>
-                  <span className="text-xs text-slate-500 font-medium">
-                    ({(1000 / totalQuestions).toFixed(1)} điểm)
+                  <span className="text-xs text-indigo-700 font-bold font-mono bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    {totalQuestions > 0 ? (
+                      ((exam.totalScore || 1000) / totalQuestions) % 1 === 0
+                        ? `${(exam.totalScore || 1000) / totalQuestions} điểm`
+                        : `${((exam.totalScore || 1000) / totalQuestions).toFixed(2)} điểm`
+                    ) : '0 điểm'}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold">
                     {currentQ.type === 'single_choice' && 'Trắc nghiệm: Chọn 1 đáp án'}

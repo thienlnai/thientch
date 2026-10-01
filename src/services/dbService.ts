@@ -3384,7 +3384,9 @@ export async function mergeExams(
   classIds?: string[],
   isPracticeTest?: boolean,
   practiceRandomCount?: number,
-  selectedSubject?: string
+  selectedSubject?: string,
+  passingScore?: number,
+  totalScore?: number
 ): Promise<Exam> {
   const sourceExams: Exam[] =
     Array.isArray(sourceExamsOrIds) && sourceExamsOrIds.length > 0 && typeof sourceExamsOrIds[0] === 'object'
@@ -3443,8 +3445,8 @@ export async function mergeExams(
     creatorName: actualCreatorName,
     classIds: allClassIds,
     durationMinutes: actualDuration,
-    totalScore: 1000,
-    passingScore: 950,
+    totalScore: Number(totalScore) || 1000,
+    passingScore: Number(passingScore) || 950,
     status: 'published',
     allowReviewAnswers: true,
     isPracticeTest: Boolean(isPracticeTest),

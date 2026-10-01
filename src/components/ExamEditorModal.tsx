@@ -76,6 +76,7 @@ interface ExamEditorModalProps {
   teacherId: string;
   teacherName: string;
   teacherSubjects?: string;
+  existingSubjects?: string[];
   onSave: (examData: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   onClose: () => void;
 }
@@ -86,31 +87,43 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
   teacherId,
   teacherName,
   teacherSubjects,
+  existingSubjects,
   onSave,
   onClose,
 }) => {
   // General Exam Info
   const [title, setTitle] = useState(initialExam?.title || '');
+
+  // 1. Quản lý danh sách các môn học tùy chỉnh đã lưu trong LocalStorage & đồng bộ hệ thống
+  const [persistedCustomSubjects, setPersistedCustomSubjects] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('thientch_custom_subjects');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) return parsed.map((s: any) => String(s).trim()).filter(Boolean);
+      }
+    } catch {}
+    return [];
+  });
   
-  // Danh sách các môn học khác đã có (từ đề cũ hoặc môn giáo viên dạy)
+  // Danh sách các môn học khác đã có (từ đề cũ, môn giáo viên dạy, các đề thi trong hệ thống, và các môn đã lưu)
   const otherKnownSubjects = useMemo(() => {
     const list: string[] = [];
-    if (initialExam?.subject) {
-      const trimmed = initialExam.subject.trim();
-      if (!DEFAULT_IC3_SUBJECTS.includes(trimmed as any) && !list.includes(trimmed)) {
-        list.push(trimmed);
+    const addIfNew = (s?: string) => {
+      if (!s) return;
+      const clean = s.trim();
+      if (clean && !DEFAULT_IC3_SUBJECTS.includes(clean as any) && !list.includes(clean)) {
+        list.push(clean);
       }
-    }
-    if (teacherSubjects) {
-      const splitSubs = teacherSubjects.split(',').map((s) => s.trim()).filter(Boolean);
-      splitSubs.forEach((s) => {
-        if (!DEFAULT_IC3_SUBJECTS.includes(s as any) && !list.includes(s)) {
-          list.push(s);
-        }
-      });
-    }
+    };
+
+    if (initialExam?.subject) addIfNew(initialExam.subject);
+    if (teacherSubjects) teacherSubjects.split(',').forEach(addIfNew);
+    if (existingSubjects) existingSubjects.forEach(addIfNew);
+    persistedCustomSubjects.forEach(addIfNew);
+
     return list;
-  }, [initialExam?.subject, teacherSubjects]);
+  }, [initialExam?.subject, teacherSubjects, existingSubjects, persistedCustomSubjects]);
 
   const [selectedSubjectOption, setSelectedSubjectOption] = useState<string>(() => {
     if (initialExam?.subject) {
@@ -131,6 +144,27 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
     }
     return selectedSubjectOption;
   }, [selectedSubjectOption, customSubjectText]);
+
+  // Hàm thêm môn học mới trực tiếp vào danh sách thả xuống
+  const handleAddNewSubject = (nameToAdd: string) => {
+    const clean = nameToAdd.trim();
+    if (!clean) return;
+
+    if (DEFAULT_IC3_SUBJECTS.includes(clean as any)) {
+      setSelectedSubjectOption(clean);
+      setCustomSubjectText('');
+      return;
+    }
+
+    const updated = Array.from(new Set([...persistedCustomSubjects, clean]));
+    setPersistedCustomSubjects(updated);
+    try {
+      localStorage.setItem('thientch_custom_subjects', JSON.stringify(updated));
+    } catch {}
+
+    setSelectedSubjectOption(clean);
+    setCustomSubjectText('');
+  };
   
   // Khối lớp được phép thấy đề thi khi học sinh đăng nhập (Requirement: Nguyễn Văn A Lớp 8.1 sẽ không thấy đề của khối 6 và 7)
   const [targetGrades, setTargetGrades] = useState<string[]>(() => {
@@ -153,6 +187,8 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
   });
 
   const [durationMinutes, setDurationMinutes] = useState<number>(initialExam?.durationMinutes || 45);
+  const [totalScore, setTotalScore] = useState<number>(initialExam?.totalScore || 1000);
+  const [passingScore, setPassingScore] = useState<number>(initialExam?.passingScore || 950);
   const [status, setStatus] = useState<'published' | 'hidden'>(initialExam?.status || 'published');
   const [allowReviewAnswers, setAllowReviewAnswers] = useState<boolean>(
     initialExam ? initialExam.allowReviewAnswers : true
@@ -189,6 +225,17 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
           },
         ]
   );
+
+  // Tính toán chính xác số điểm của từng câu hỏi theo tổng điểm và số lượng câu hỏi thực tế
+  const pointsPerQuestion = useMemo(() => {
+    if (questions.length === 0) return 0;
+    return (Number(totalScore) || 1000) / questions.length;
+  }, [questions.length, totalScore]);
+
+  const formattedPointsPerQuestion = useMemo(() => {
+    if (pointsPerQuestion === 0) return '0';
+    return pointsPerQuestion % 1 === 0 ? pointsPerQuestion.toString() : pointsPerQuestion.toFixed(2);
+  }, [pointsPerQuestion]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCompressingImage, setIsCompressingImage] = useState(false);
@@ -496,13 +543,21 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
       setShowSettings(true);
       return;
     }
-    if (selectedSubjectOption === '__custom__' && !customSubjectText.trim()) {
-      setErrorMsg('Vui lòng nhập tên môn học khác cho đề thi!');
-      setShowSettings(true);
-      return;
+    if (selectedSubjectOption === '__custom__') {
+      if (!customSubjectText.trim()) {
+        setErrorMsg('Vui lòng nhập tên môn học khác cho đề thi!');
+        setShowSettings(true);
+        return;
+      }
+      handleAddNewSubject(customSubjectText.trim());
     }
     if (assignedClasses.length > 0 && classIds.length === 0) {
       setErrorMsg('Vui lòng phân công ít nhất một lớp học được thi!');
+      setShowSettings(true);
+      return;
+    }
+    if (!passingScore || passingScore <= 0 || passingScore > (Number(totalScore) || 1000)) {
+      setErrorMsg(`Điểm đạt phải lớn hơn 0 và không vượt quá tổng điểm (${totalScore || 1000} điểm)!`);
       setShowSettings(true);
       return;
     }
@@ -565,8 +620,8 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
         creatorName: teacherName,
         classIds,
         durationMinutes: Number(durationMinutes) || 45,
-        totalScore: 1000,
-        passingScore: 950,
+        totalScore: Number(totalScore) || 1000,
+        passingScore: Number(passingScore) || 950,
         status,
         allowReviewAnswers,
         isPracticeTest,
@@ -791,7 +846,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                         ))}
                       </optgroup>
                       {otherKnownSubjects.length > 0 && (
-                        <optgroup label="Môn học khác đã có">
+                        <optgroup label="Môn học khác đã có & giáo viên đã thêm">
                           {otherKnownSubjects.map((s) => (
                             <option key={s} value={s}>
                               {s}
@@ -806,18 +861,39 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
 
                     {/* Trường nhập môn học tự do khi chọn 'Thêm môn học khác' */}
                     {selectedSubjectOption === '__custom__' && (
-                      <div className="mt-2 animate-in fade-in slide-in-from-top-1">
-                        <input
-                          type="text"
-                          value={customSubjectText}
-                          onChange={(e) => setCustomSubjectText(e.target.value)}
-                          placeholder="Nhập tên môn học (Ví dụ: Tin học lớp 8, Lập trình Python, Công nghệ...)"
-                          className="w-full px-3.5 py-2 rounded-xl border border-indigo-300 bg-indigo-50/50 text-xs font-semibold focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all"
-                          autoFocus
-                          required
-                        />
-                        <p className="text-[10px] text-slate-500 mt-1">
-                          Đề thi sẽ được tạo với môn học do bạn vừa nhập.
+                      <div className="mt-2.5 p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200 animate-in fade-in slide-in-from-top-1 space-y-2">
+                        <label className="block text-[11px] font-bold text-indigo-950 flex items-center justify-between">
+                          <span>Nhập tên môn học mới theo chuyên môn giảng dạy:</span>
+                          <span className="text-[10px] text-indigo-600 font-semibold">Nhấn Enter để thêm</span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={customSubjectText}
+                            onChange={(e) => setCustomSubjectText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddNewSubject(customSubjectText);
+                              }
+                            }}
+                            placeholder="Ví dụ: Tin học lớp 8, Lập trình Python, Công nghệ..."
+                            className="flex-1 px-3 py-2 rounded-xl border border-indigo-300 bg-white text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all shadow-2xs"
+                            autoFocus
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddNewSubject(customSubjectText)}
+                            disabled={!customSubjectText.trim()}
+                            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white text-xs font-bold shrink-0 transition-colors shadow-2xs cursor-pointer flex items-center gap-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Thêm vào danh sách</span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-indigo-700">
+                          ✓ Môn học này sẽ tự động lưu và cập nhật ngay vào danh sách thả xuống để bạn dễ dàng chọn lại cho các đề thi tiếp theo.
                         </p>
                       </div>
                     )}
@@ -825,7 +901,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Thời Gian Làm Bài (Phút)</span>
+                      <span>Thời Gian (Phút)</span>
                     </label>
                     <input
                       type="number"
@@ -833,8 +909,59 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                       max={180}
                       value={durationMinutes}
                       onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-bold font-mono text-indigo-700"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs font-bold font-mono text-indigo-700 bg-white"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Award className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Điểm Đạt (Passing Score)</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        {Math.round(((Number(passingScore) || 950) / (Number(totalScore) || 1000)) * 100)}%
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        max={Number(totalScore) || 1000}
+                        value={passingScore}
+                        onChange={(e) => setPassingScore(Number(e.target.value))}
+                        placeholder="Ví dụ: 950"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-emerald-300 bg-emerald-50/30 text-xs font-bold font-mono text-emerald-800 focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                        required
+                      />
+                      <span className="absolute right-3 top-2.5 text-[11px] font-bold text-slate-400">
+                        / {Number(totalScore) || 1000}đ
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* THANH THỐNG KÊ TÍNH TOÁN ĐIỂM CHÍNH XÁC */}
+                <div className="p-3.5 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-emerald-50/40 rounded-2xl border border-slate-200/90 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <span className="flex items-center gap-1.5 font-semibold text-slate-700">
+                      <HelpCircle className="w-4 h-4 text-indigo-500" />
+                      <span>Tổng số câu hỏi: <strong className="text-slate-900 font-mono text-sm">{questions.length}</strong></span>
+                    </span>
+                    <span className="text-slate-300">•</span>
+                    <span className="font-semibold text-slate-700">
+                      Thang điểm: <strong className="text-slate-900 font-mono">{totalScore}đ</strong>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-3 py-1.5 bg-indigo-100/70 border border-indigo-200 rounded-xl text-indigo-900 font-bold font-mono text-xs flex items-center gap-1.5 shadow-2xs">
+                      <span>🎯 Điểm mỗi câu:</span>
+                      <strong className="text-indigo-700 text-sm font-black">
+                        {formattedPointsPerQuestion}đ
+                      </strong>
+                    </span>
+                    <span className="px-3 py-1.5 bg-emerald-100/70 border border-emerald-200 rounded-xl text-emerald-900 font-bold font-mono text-xs shadow-2xs">
+                      ✓ Chuẩn đạt: <strong>≥ {passingScore}đ</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -1113,7 +1240,6 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
               {questions.map((question, qIdx) => {
                 const typeConfig = questionTypeLabels[question.type];
                 const TypeIcon = typeConfig.icon;
-                const pointsPerQ = (1000 / questions.length).toFixed(1);
 
                 return (
                   <div
@@ -1127,8 +1253,8 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                         <span className="px-3.5 py-1.5 rounded-2xl bg-indigo-600 text-white font-bold text-xs font-mono shadow-xs">
                           CÂU {qIdx + 1}
                         </span>
-                        <span className="px-2.5 py-1 rounded-xl bg-slate-100 text-slate-700 font-bold text-xs font-mono">
-                          {pointsPerQ} điểm
+                        <span className="px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-800 font-bold text-xs font-mono shadow-2xs">
+                          {formattedPointsPerQuestion} điểm
                         </span>
 
                         {/* Question Type Switcher */}

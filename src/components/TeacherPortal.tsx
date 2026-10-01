@@ -376,7 +376,42 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [mergeSelectedExamIds, setMergeSelectedExamIds] = useState<string[]>([]);
   const [mergeNewTitle, setMergeNewTitle] = useState('');
   const [mergeDuration, setMergeDuration] = useState<number>(60);
+  const [mergePassingScore, setMergePassingScore] = useState<number>(950);
   const [isMerging, setIsMerging] = useState(false);
+
+  // Tính toán chính xác số câu hỏi và số điểm từng câu của đề thi gộp
+  const mergeSelectedExams = useMemo(() => {
+    return exams.filter((e) => mergeSelectedExamIds.includes(e.id));
+  }, [exams, mergeSelectedExamIds]);
+
+  const mergeTotalQuestionsCount = useMemo(() => {
+    const seen = new Set<string>();
+    let count = 0;
+    mergeSelectedExams.forEach((ex) => {
+      if (ex.questions && ex.questions.length > 0) {
+        ex.questions.forEach((q) => {
+          const key = q.id || q.title;
+          if (!seen.has(key)) {
+            seen.add(key);
+            count++;
+          }
+        });
+      } else {
+        count += (ex.totalQuestions || 0);
+      }
+    });
+    return count;
+  }, [mergeSelectedExams]);
+
+  const mergePointsPerQuestion = useMemo(() => {
+    if (mergeTotalQuestionsCount === 0) return 0;
+    return 1000 / mergeTotalQuestionsCount;
+  }, [mergeTotalQuestionsCount]);
+
+  const formattedMergePointsPerQuestion = useMemo(() => {
+    if (mergePointsPerQuestion === 0) return '0';
+    return mergePointsPerQuestion % 1 === 0 ? mergePointsPerQuestion.toString() : mergePointsPerQuestion.toFixed(2);
+  }, [mergePointsPerQuestion]);
 
   // Danh sách các môn học có sẵn từ đề thi của giáo viên
   const mergeAvailableSubjects = useMemo(() => {
@@ -969,12 +1004,15 @@ NOTIFY pgrst, 'reload schema';`;
         assignedClasses.map((c) => c.id),
         false,
         0,
-        targetSubject
+        targetSubject,
+        Number(mergePassingScore) || 950,
+        1000
       );
       showToast(`Đã gộp thành công ${selectedSourceExams.length} đề thi thành "${mergeNewTitle}"!`);
       setIsMergeModalOpen(false);
       setMergeSelectedExamIds([]);
       setMergeNewTitle('');
+      setMergePassingScore(950);
     } catch {
       showToast('Không thể gộp đề thi. Vui lòng thử lại!', 'error');
     } finally {
@@ -3579,6 +3617,7 @@ NOTIFY pgrst, 'reload schema';`;
           teacherId={teacher.id}
           teacherName={teacher.fullName || teacher.username}
           teacherSubjects={teacher.subjects}
+          existingSubjects={Array.from(new Set(exams.map((e) => e.subject?.trim()).filter(Boolean)))}
           onSave={async (examData) => {
             if (editingExamId) {
               await updateExam(editingExamId, examData);
@@ -3672,18 +3711,65 @@ NOTIFY pgrst, 'reload schema';`;
                 />
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Thời Gian Làm Bài (Phút)
-                </label>
-                <input
-                  type="number"
-                  min={10}
-                  value={mergeDuration}
-                  onChange={(e) => setMergeDuration(Number(e.target.value))}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Thời Gian Làm Bài (Phút)
+                  </label>
+                  <input
+                    type="number"
+                    min={10}
+                    value={mergeDuration}
+                    onChange={(e) => setMergeDuration(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Điểm Đạt (Passing Score)</span>
+                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                      {Math.round(((Number(mergePassingScore) || 950) / 1000) * 100)}%
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={mergePassingScore}
+                      onChange={(e) => setMergePassingScore(Number(e.target.value))}
+                      placeholder="950"
+                      className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-purple-50/40 text-xs font-mono font-bold text-purple-900 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400">
+                      / 1000đ
+                    </span>
+                  </div>
+                </div>
               </div>
+
+              {/* BẢNG TÍNH TOÁN CHÍNH XÁC SỐ ĐIỂM TỪNG CÂU SAU KHI GỘP */}
+              {mergeSelectedExamIds.length > 0 && (
+                <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 rounded-2xl border border-purple-200 flex flex-wrap items-center justify-between gap-2.5 text-xs shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-purple-900">
+                      Tổng số câu sau gộp: <strong className="font-mono text-sm text-purple-950">{mergeTotalQuestionsCount}</strong> câu
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 bg-white border border-purple-300 rounded-lg text-purple-900 font-bold font-mono text-[11px] shadow-2xs flex items-center gap-1">
+                      <span>🎯 Số điểm mỗi câu:</span>
+                      <strong className="text-purple-700 text-xs font-black">
+                        {formattedMergePointsPerQuestion}đ
+                      </strong>
+                    </span>
+                    <span className="px-2.5 py-1 bg-purple-600 text-white rounded-lg font-bold font-mono text-[11px] shadow-2xs">
+                      ✓ Đạt: ≥ {mergePassingScore}đ
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-1.5">

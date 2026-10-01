@@ -529,33 +529,39 @@ export function evaluateQuestionAnswer(
 
   return {
     isCorrect,
-    earnedScore: Math.round(earnedScore * 10) / 10,
+    earnedScore: Math.round(earnedScore * 100) / 100,
     details,
   };
 }
 
 /**
- * Tính tổng điểm đề thi (Thang điểm chuẩn luôn là 1000 điểm, Điểm đạt là 950 điểm)
+ * Tính tổng điểm đề thi theo thang điểm và điểm đạt tùy biến của giáo viên
  */
 export function calculateExamScore(
   questions: ExamQuestion[],
-  studentAnswers: Record<string, any>
+  studentAnswers: Record<string, any>,
+  customPassingScore?: number,
+  customMaxScore?: number
 ): {
   totalScore: number;
   maxScore: number;
+  passingScore: number;
+  pointsPerQuestion: number;
   isPassed: boolean;
   questionResults: Record<string, { isCorrect: boolean; earnedScore: number; maxScore: number; details: any }>;
   correctCount: number;
   totalQuestions: number;
 } {
-  const maxScore = 1000;
-  const passingScore = 950;
+  const maxScore = customMaxScore !== undefined && customMaxScore > 0 ? customMaxScore : 1000;
+  const passingScore = customPassingScore !== undefined && customPassingScore > 0 ? customPassingScore : 950;
   const totalQuestions = questions.length;
 
   if (totalQuestions === 0) {
     return {
       totalScore: 0,
       maxScore,
+      passingScore,
+      pointsPerQuestion: 0,
       isPassed: false,
       questionResults: {},
       correctCount: 0,
@@ -563,6 +569,7 @@ export function calculateExamScore(
     };
   }
 
+  // Tính toán chính xác số điểm của từng câu hỏi
   const pointsPerQuestion = maxScore / totalQuestions;
   const questionResults: Record<string, any> = {};
   let totalEarned = 0;
@@ -574,7 +581,7 @@ export function calculateExamScore(
     questionResults[q.id] = {
       isCorrect: evalResult.isCorrect,
       earnedScore: evalResult.earnedScore,
-      maxScore: Math.round(pointsPerQuestion * 10) / 10,
+      maxScore: Math.round(pointsPerQuestion * 100) / 100,
       details: evalResult.details,
     };
 
@@ -590,6 +597,8 @@ export function calculateExamScore(
   return {
     totalScore: finalScore,
     maxScore,
+    passingScore,
+    pointsPerQuestion: Math.round(pointsPerQuestion * 100) / 100,
     isPassed,
     questionResults,
     correctCount,
