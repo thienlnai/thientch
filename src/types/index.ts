@@ -188,8 +188,9 @@ export interface Exam {
   targetGrades?: string[];    // Danh sách khối lớp được phép thấy đề thi: ['Khối 8'], ['Khối 6', 'Khối 7'], hoặc ['all']
   classIds: string[];         // Các lớp được phép tham gia thi
   durationMinutes: number;    // Thời gian làm bài (phút)
-  totalScore: number;         // Luôn là 1000 điểm
-  passingScore: number;       // Luôn là 950 điểm
+  totalScore: number;         // Thang điểm (mặc định 1000)
+  passingScore: number;       // Điểm đạt
+  requiredPassCount?: number; // Số lần làm đạt yêu cầu để hoàn tất đề thi (mặc định 1)
   status: 'published' | 'hidden'; // Cho phép giáo viên chọn ẩn hoặc hiện đề thi
   allowReviewAnswers: boolean;// Cho học sinh xem lại đáp án sau khi nộp bài
   isPracticeTest?: boolean;   // Đề thi thử với số lượng câu ngẫu nhiên

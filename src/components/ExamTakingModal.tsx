@@ -14,7 +14,9 @@ import { autoSaveExamDraft } from '../services/dbService.ts';
 import { useExamSecurity } from '../hooks/useExamSecurity.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
+import { ExamReviewModal } from './ExamReviewModal.tsx';
 import { ThientchLogo } from './ThientchLogo.tsx';
+import confetti from 'canvas-confetti';
 import { 
   Clock, 
   AlertTriangle, 
@@ -42,7 +44,9 @@ import {
   Database,
   HardDrive,
   ZoomIn,
-  Flag
+  Flag,
+  Target,
+  Trophy
 } from 'lucide-react';
 
 interface ExamTakingModalProps {
@@ -53,6 +57,8 @@ interface ExamTakingModalProps {
   onSubmitSuccess: (submission: ExamSubmission) => void;
   onReviewAnswers?: (submission: ExamSubmission) => void;
   attemptNumber?: number;
+  previousPassedCount?: number;
+  allSubmissions?: ExamSubmission[];
 }
 
 export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
@@ -63,6 +69,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   onSubmitSuccess,
   onReviewAnswers,
   attemptNumber = 1,
+  previousPassedCount = 0,
 }) => {
   // Khóa lưu tạm localStorage duy nhất cho mỗi học sinh và mỗi đề thi (Offline-First)
   const draftStorageKey = `thientch_exam_draft_${exam.id}_${currentUser.id}`;
@@ -83,7 +90,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const initialDraft = loadSavedDraft();
 
   // Snapshot câu hỏi: nếu đã có bản nháp offline thì tái sử dụng đúng bộ câu hỏi và trật tự đã xáo trộn
-  const [shuffledQuestions] = useState<ExamQuestion[]>(() => {
+  const [shuffledQuestions, setShuffledQuestions] = useState<ExamQuestion[]>(() => {
     if (initialDraft?.shuffledQuestions && Array.isArray(initialDraft.shuffledQuestions) && initialDraft.shuffledQuestions.length > 0) {
       return initialDraft.shuffledQuestions;
     }
@@ -93,6 +100,93 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       exam.practiceRandomCount
     );
   });
+
+  const [attemptNumberState, setAttemptNumberState] = useState<number>(attemptNumber || 1);
+  const [passedAttemptsCount, setPassedAttemptsCount] = useState<number>(previousPassedCount || 0);
+  const [isReviewingInline, setIsReviewingInline] = useState<boolean>(false);
+
+  const targetPassCount = Math.max(1, exam.requiredPassCount || 1);
+  const isRequirementMet = isTeacherTesting || (passedAttemptsCount >= targetPassCount);
+  const passesRemaining = Math.max(0, targetPassCount - passedAttemptsCount);
+
+  const triggerFireworks = () => {
+    try {
+      const duration = 4.5 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 35, spread: 360, ticks: 70, zIndex: 99999 };
+
+      const interval: any = setInterval(() => {
+        const timeLeft = animationEnd - Date.now();
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+        const particleCount = 60 * (timeLeft / duration);
+        // Pháo hoa bên trái
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: Math.random() * 0.3 + 0.1, y: Math.random() * 0.4 + 0.1 },
+          colors: ['#10B981', '#6366F1', '#F59E0B', '#EC4899', '#3B82F6', '#8B5CF6', '#F43F5E'],
+        });
+        // Pháo hoa bên phải
+        confetti({
+          ...defaults,
+          particleCount,
+          origin: { x: Math.random() * 0.3 + 0.6, y: Math.random() * 0.4 + 0.1 },
+          colors: ['#10B981', '#6366F1', '#F59E0B', '#EC4899', '#3B82F6', '#8B5CF6', '#F43F5E'],
+        });
+        // Pháo hoa trung tâm màn hình
+        confetti({
+          ...defaults,
+          particleCount: particleCount * 0.85,
+          origin: { x: 0.5, y: 0.35 },
+          colors: ['#10B981', '#6366F1', '#F59E0B', '#EC4899', '#3B82F6', '#8B5CF6', '#F43F5E'],
+        });
+      }, 200);
+    } catch (err) {
+      console.warn('Fireworks effect error:', err);
+    }
+  };
+
+  const handleRetakeExam = () => {
+    setIsReviewingInline(false);
+    setSubmissionResult(null);
+    setAnswers({});
+    setFlaggedQuestions([]);
+    setCurrentIndex(0);
+    startTimeRef.current = Date.now();
+    setTimeRemaining(exam.durationMinutes * 60);
+    setViolationCount(0);
+    setViolationLogs([]);
+    setShuffledQuestions(
+      shuffleExamQuestionsAndOptions(
+        exam.questions,
+        exam.isPracticeTest,
+        exam.practiceRandomCount
+      )
+    );
+    setAttemptNumberState((prev) => prev + 1);
+    try {
+      localStorage.removeItem(draftStorageKey);
+    } catch {}
+    enterFullscreen();
+  };
+
+  const handleFinishAndClose = () => {
+    if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
+      try {
+        (navigator as any).keyboard.unlock();
+      } catch {}
+    }
+    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      } else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen();
+      }
+    }
+    onClose();
+  };
 
   const [currentIndex, setCurrentIndex] = useState<number>(() => {
     if (typeof initialDraft?.currentIndex === 'number') {
@@ -148,6 +242,13 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<ExamSubmission | null>(null);
+
+  // Kích hoạt pháo hoa chúc mừng ngay khi đạt yêu cầu số lần làm bài (Requirement 2.b)
+  useEffect(() => {
+    if (submissionResult && isRequirementMet) {
+      triggerFireworks();
+    }
+  }, [submissionResult, isRequirementMet]);
 
   // Anti-cheat monitoring state
   const [violationCount, setViolationCount] = useState(0);
@@ -721,22 +822,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     setIsSubmitting(true);
     isFinishedRef.current = true;
 
-    // Mở khóa bàn phím và thoát toàn màn hình khi nộp bài xong
+    // Mở khóa bàn phím (Vẫn GIỮ NGUYÊN Fullscreen theo Requirement 4 cho tới khi bấm Hoàn Tất & Đóng)
     if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
       try {
         (navigator as any).keyboard.unlock();
       } catch {}
     }
-    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      } else if ((document as any).webkitExitFullscreen) {
-        (document as any).webkitExitFullscreen();
-      }
-    }
 
     const timeSpentSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
     const scoreResult = calculateExamScore(shuffledQuestions, answers, exam.passingScore, exam.totalScore);
+
+    // Cập nhật số lần làm đạt yêu cầu
+    const newPassedCount = scoreResult.isPassed ? passedAttemptsCount + 1 : passedAttemptsCount;
+    setPassedAttemptsCount(newPassedCount);
+
+    const targetPass = Math.max(1, exam.requiredPassCount || 1);
+    const metRequirement = isTeacherTesting || (newPassedCount >= targetPass);
+
+    if (metRequirement) {
+      setTimeout(() => triggerFireworks(), 350);
+    }
 
     // Xác định thông tin thí sinh
     const isStudentUser = 'studentCode' in currentUser;
@@ -762,7 +867,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       submittedAt: now.toISOString(),
       dateKey,
       timeSpentSeconds,
-      attemptNumber,
+      attemptNumber: attemptNumberState,
       isPractice: exam.isPracticeTest,
       isTeacherTesting,
       studentAnswers: answers,
@@ -787,16 +892,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       setShowConfirmSubmit(false);
       isFinishedRef.current = true;
 
-      // Nhả khóa bàn phím và thoát toàn màn hình sau khi nộp bài
+      // Nhả khóa bàn phím (vẫn GIỮ NGUYÊN Toàn Màn Hình theo Requirement 4 cho tới khi học sinh bấm "Hoàn Tất & Đóng")
       if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
         try {
           (navigator as any).keyboard.unlock();
-        } catch {}
-      }
-      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-        try {
-          const exitFs = document.exitFullscreen || (document as any).webkitExitFullscreen;
-          if (exitFs) exitFs.call(document).catch(() => {});
         } catch {}
       }
     } catch (err: any) {
@@ -845,7 +944,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       />
 
       {/* ================= MODAL BẮT BUỘC TOÀN MÀN HÌNH ĐỂ ẨN THANH CÔNG CỤ TRÌNH DUYỆT ================= */}
-      {!isFullscreen && !submissionResult && !isTeacherTesting && (
+      {!isFullscreen && !isTeacherTesting && (
         <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-md animate-in fade-in zoom-in-95">
           <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 text-center shadow-2xl border-2 border-indigo-500 relative overflow-hidden">
             <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-600" />
@@ -853,10 +952,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
               <Maximize className="w-8 h-8" />
             </div>
             <h3 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight mb-2">
-              Chế Độ Thi Toàn Màn Hình
+              {submissionResult ? 'Tiếp Tục Giữ Chế Độ Toàn Màn Hình' : 'Chế Độ Thi Toàn Màn Hình'}
             </h3>
             <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6">
-              Hệ thống yêu cầu chuyển sang <strong>Toàn Màn Hình</strong> để ẩn thanh công cụ trình duyệt web và chống phím tắt cho đến khi bạn bấm <strong>Nộp bài</strong>.
+              {submissionResult
+                ? 'Hệ thống yêu cầu giữ toàn màn hình cho đến khi bạn hoàn tất và bấm nút "Hoàn Tất & Đóng".'
+                : 'Hệ thống yêu cầu chuyển sang Toàn Màn Hình để ẩn thanh công cụ trình duyệt web và chống phím tắt cho đến khi bạn nộp bài.'}
             </p>
             <button
               type="button"
@@ -864,7 +965,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
               className="w-full py-3.5 px-6 rounded-2xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-sm uppercase tracking-wider shadow-lg shadow-indigo-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
               <Maximize className="w-4 h-4" />
-              <span>Bật Toàn Màn Hình & Tiếp Tục Làm Bài</span>
+              <span>{submissionResult ? 'Kích Hoạt Lại Toàn Màn Hình' : 'Bật Toàn Màn Hình & Bắt Đầu Làm Bài'}</span>
             </button>
           </div>
         </div>
@@ -1091,14 +1192,17 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       )}
 
       {/* ================= MODAL HIỂN THỊ KẾT QUẢ SAU KHI NỘP BÀI ================= */}
-      {submissionResult && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in zoom-in-95">
+      {submissionResult && !isReviewingInline && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in zoom-in-95 select-none">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden text-slate-900 border border-slate-200">
+            {/* Header popup */}
             <div
-              className={`p-6 text-white text-center ${
-                submissionResult.isPassed
-                  ? 'bg-gradient-to-r from-emerald-600 to-teal-600'
-                  : 'bg-gradient-to-r from-amber-600 to-red-600'
+              className={`p-6 text-white text-center transition-colors ${
+                isRequirementMet
+                  ? 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700'
+                  : submissionResult.isPassed
+                  ? 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600'
+                  : 'bg-gradient-to-r from-red-600 via-rose-600 to-orange-600'
               }`}
             >
               <div className="mb-2 flex items-center justify-center">
@@ -1106,11 +1210,19 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   THIEN<span className="text-[#EF4444] font-black">TECH</span> :: KHẢO THÍ SỐ
                 </span>
               </div>
-              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center mx-auto mb-3">
-                <Award className="w-9 h-9 text-white" />
+              <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-xs flex items-center justify-center mx-auto mb-3 shadow-inner">
+                {isRequirementMet ? (
+                  <Trophy className="w-9 h-9 text-white animate-bounce" />
+                ) : (
+                  <Award className="w-9 h-9 text-white" />
+                )}
               </div>
-              <h2 className="text-2xl font-black tracking-wide">
-                {submissionResult.isPassed ? 'CHÚC MỪNG BẠN ĐÃ ĐẠT!' : 'BÀI THI CHƯA ĐẠT CHUẨN'}
+              <h2 className="text-xl sm:text-2xl font-black tracking-wide">
+                {isRequirementMet
+                  ? '🎉 CHÚC MỪNG BẠN ĐÃ HOÀN THÀNH XUẤT SẮC!'
+                  : submissionResult.isPassed
+                  ? 'LẦN THI NÀY ĐÃ ĐẠT ĐIỂM CHUẨN!'
+                  : 'BÀI THI CHƯA ĐẠT CHUẨN'}
               </h2>
               <p className="text-xs text-white/90 mt-1">
                 Điểm chuẩn khảo thí: <strong>{exam.passingScore ?? 950} / {exam.totalScore ?? 1000} điểm</strong>
@@ -1118,6 +1230,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
             </div>
 
             <div className="p-6 space-y-4">
+              {/* Điểm số */}
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-center">
                 <div className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   Điểm Số Của Bạn
@@ -1143,6 +1256,61 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                 </div>
               </div>
 
+              {/* KHUNG TIẾN ĐỘ SỐ LẦN LÀM ĐẠT YÊU CẦU (Requirement 2a & 2b) */}
+              <div
+                className={`p-4 rounded-2xl border ${
+                  isRequirementMet
+                    ? 'bg-emerald-50/80 border-emerald-200 text-emerald-950'
+                    : 'bg-amber-50/80 border-amber-200 text-amber-950'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    {isRequirementMet ? (
+                      <Trophy className="w-5 h-5 text-emerald-600 shrink-0" />
+                    ) : (
+                      <Target className="w-5 h-5 text-amber-600 shrink-0" />
+                    )}
+                    <span className="font-bold text-xs uppercase tracking-wide">
+                      Tiến độ làm đạt yêu cầu:
+                    </span>
+                  </div>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-black font-mono shadow-xs ${
+                      isRequirementMet
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-amber-500 text-white'
+                    }`}
+                  >
+                    {passedAttemptsCount} / {targetPassCount} LẦN ĐẠT
+                  </span>
+                </div>
+
+                <div className="w-full h-2.5 rounded-full bg-slate-200 overflow-hidden mb-2">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isRequirementMet ? 'bg-emerald-600' : 'bg-amber-500'
+                    }`}
+                    style={{
+                      width: `${Math.min(100, Math.round((passedAttemptsCount / targetPassCount) * 100))}%`,
+                    }}
+                  />
+                </div>
+
+                <p className="text-[11px] font-medium leading-relaxed">
+                  {isRequirementMet ? (
+                    <span className="text-emerald-700 font-semibold">
+                      ✓ Tuyệt vời! Bạn đã hoàn thành xuất sắc đủ <strong>{targetPassCount} lần làm bài đạt chuẩn</strong> theo quy định của giáo viên.
+                    </span>
+                  ) : (
+                    <span className="text-amber-800 font-semibold">
+                      ⚠️ Giáo viên yêu cầu đề thi này phải làm đạt chuẩn <strong>{targetPassCount} lần</strong>. Hiện bạn mới đạt {passedAttemptsCount} lần, cần làm đạt thêm <strong>{passesRemaining} lần nữa</strong> mới được phép hoàn tất và thoát bài thi.
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              {/* Thời gian làm bài & Vi phạm */}
               <div className="grid grid-cols-2 gap-3 text-xs">
                 <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
                   <span className="text-slate-500">Thời gian làm bài:</span>
@@ -1161,30 +1329,48 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 pt-2">
-                {exam.allowReviewAnswers && onReviewAnswers && (
+              {/* CÁC NÚT THAO TÁC (Requirement 2a & 2b) */}
+              <div className="pt-2">
+                {isRequirementMet ? (
+                  // ĐÃ ĐẠT ĐỦ SỐ LẦN YÊU CẦU: Ẩn xem lại đáp án, HIỆN nút Hoàn Tất & Đóng
                   <button
                     type="button"
-                    onClick={() => {
-                      onReviewAnswers(submissionResult);
-                    }}
-                    className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    onClick={handleFinishAndClose}
+                    className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm shadow-lg transition-all cursor-pointer text-center hover:scale-101 flex items-center justify-center gap-2"
                   >
-                    <Eye className="w-4 h-4" />
-                    <span>Xem Lại Đáp Án Chi Tiết</span>
+                    <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    <span>Hoàn Tất & Đóng</span>
                   </button>
+                ) : (
+                  // CHƯA ĐẠT ĐỦ SỐ LẦN YÊU CẦU: Ẩn nút Hoàn Tất & Đóng, CHỈ GIỮ LẠI nút xem lại đáp án
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setIsReviewingInline(true)}
+                      className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-sm shadow-xl shadow-indigo-600/30 transition-all flex items-center justify-center gap-2.5 cursor-pointer hover:scale-101"
+                    >
+                      <Eye className="w-5 h-5" />
+                      <span>Xem Lại Đáp Án Chi Tiết</span>
+                    </button>
+                  </div>
                 )}
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs shadow-md transition-all cursor-pointer text-center"
-                >
-                  Hoàn Tất & Đóng
-                </button>
               </div>
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL XEM LẠI ĐÁP ÁN INLINE (Giữ nguyên Fullscreen, tắt nút thoát, thay bằng nút Làm Lại Đề Thi - Requirement 3 & 4) */}
+      {submissionResult && isReviewingInline && (
+        <ExamReviewModal
+          submission={submissionResult}
+          onClose={() => setIsReviewingInline(false)}
+          exam={exam}
+          isRequiredPassEnforced={!isRequirementMet}
+          onRetakeExam={handleRetakeExam}
+          requiredPassCount={targetPassCount}
+          passedAttemptsCount={passedAttemptsCount}
+        />
       )}
 
       {/* ================= THANH TIÊU ĐỀ PHÒNG THI (HỌC THUẬT, CỐ ĐỊNH, KHÔNG CUỘN) ================= */}

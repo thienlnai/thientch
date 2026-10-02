@@ -83,6 +83,7 @@ CREATE TABLE IF NOT EXISTS exams (
   durationMinutes INTEGER DEFAULT 45,
   totalScore INTEGER DEFAULT 1000,
   passingScore INTEGER DEFAULT 950,
+  requiredPassCount INTEGER DEFAULT 1,
   status TEXT DEFAULT 'published',
   allowReviewAnswers INTEGER DEFAULT 1,
   isPracticeTest INTEGER DEFAULT 0,
@@ -347,4 +348,10 @@ CREATE INDEX IF NOT EXISTS idx_submissions_score ON submissions(score);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_actor ON audit_logs(actor);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_action ON audit_logs(action);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_createdAt ON audit_logs(createdAt);
+
+-- =========================================================================
+-- LỆNH BỔ SUNG CỘT CHO BẢNG EXAMS HIỆN CÓ TRÊN TURSO
+-- Chạy lệnh này nếu cơ sở dữ liệu Turso đã được tạo trước đó:
+-- =========================================================================
+-- ALTER TABLE exams ADD COLUMN requiredPassCount INTEGER DEFAULT 1;
 

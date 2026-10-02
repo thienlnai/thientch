@@ -44,7 +44,8 @@ import {
   Loader2,
   Database,
   BookOpen,
-  GraduationCap
+  GraduationCap,
+  Target
 } from 'lucide-react';
 import { compressImageFile, optimizeExamQuestions, estimateExamPayloadSize } from '../utils/imageOptimizer.ts';
 import { 
@@ -189,6 +190,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
   const [durationMinutes, setDurationMinutes] = useState<number>(initialExam?.durationMinutes || 45);
   const [totalScore, setTotalScore] = useState<number>(initialExam?.totalScore || 1000);
   const [passingScore, setPassingScore] = useState<number>(initialExam?.passingScore || 950);
+  const [requiredPassCount, setRequiredPassCount] = useState<number>(initialExam?.requiredPassCount || 1);
   const [status, setStatus] = useState<'published' | 'hidden'>(initialExam?.status || 'published');
   const [allowReviewAnswers, setAllowReviewAnswers] = useState<boolean>(
     initialExam ? initialExam.allowReviewAnswers : true
@@ -561,6 +563,11 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
       setShowSettings(true);
       return;
     }
+    if (!requiredPassCount || requiredPassCount < 1) {
+      setErrorMsg('Số lần làm đạt yêu cầu phải từ 1 lần trở lên!');
+      setShowSettings(true);
+      return;
+    }
     if (questions.length === 0) {
       setErrorMsg('Đề thi phải có ít nhất 1 câu hỏi!');
       return;
@@ -622,6 +629,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
         durationMinutes: Number(durationMinutes) || 45,
         totalScore: Number(totalScore) || 1000,
         passingScore: Number(passingScore) || 950,
+        requiredPassCount: Math.max(1, Number(requiredPassCount) || 1),
         status,
         allowReviewAnswers,
         isPracticeTest,
@@ -813,8 +821,8 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                   />
                 </div>
 
-                {/* Môn học, Thời gian làm bài */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Môn học, Thời gian làm bài, Điểm đạt, Số lần làm đạt */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
@@ -938,6 +946,32 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                       </span>
                     </div>
                   </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <Target className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Số Lần Làm Đạt Yêu Cầu</span>
+                      </span>
+                      <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                        Bắt buộc
+                      </span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={requiredPassCount}
+                        onChange={(e) => setRequiredPassCount(Math.max(1, Number(e.target.value) || 1))}
+                        placeholder="Ví dụ: 1"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-purple-300 bg-purple-50/30 text-xs font-bold font-mono text-purple-900 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                        required
+                      />
+                      <span className="absolute right-3 top-2.5 text-[11px] font-bold text-purple-600">
+                        lần đạt
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* THANH THỐNG KÊ TÍNH TOÁN ĐIỂM CHÍNH XÁC */}
@@ -952,7 +986,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                       Thang điểm: <strong className="text-slate-900 font-mono">{totalScore}đ</strong>
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-3 py-1.5 bg-indigo-100/70 border border-indigo-200 rounded-xl text-indigo-900 font-bold font-mono text-xs flex items-center gap-1.5 shadow-2xs">
                       <span>🎯 Điểm mỗi câu:</span>
                       <strong className="text-indigo-700 text-sm font-black">
@@ -961,6 +995,9 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                     </span>
                     <span className="px-3 py-1.5 bg-emerald-100/70 border border-emerald-200 rounded-xl text-emerald-900 font-bold font-mono text-xs shadow-2xs">
                       ✓ Chuẩn đạt: <strong>≥ {passingScore}đ</strong>
+                    </span>
+                    <span className="px-3 py-1.5 bg-purple-100/70 border border-purple-200 rounded-xl text-purple-900 font-bold font-mono text-xs shadow-2xs">
+                      🏆 Cần làm đạt: <strong>{requiredPassCount} lần</strong>
                     </span>
                   </div>
                 </div>

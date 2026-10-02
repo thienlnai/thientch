@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Sparkles,
   Trash2,
-  ZoomIn
+  ZoomIn,
+  RotateCcw
 } from 'lucide-react';
 
 interface ExamReviewModalProps {
@@ -28,6 +29,10 @@ interface ExamReviewModalProps {
   exam?: Exam;
   exams?: Exam[];
   allSubmissions?: ExamSubmission[];
+  isRequiredPassEnforced?: boolean;
+  onRetakeExam?: () => void;
+  requiredPassCount?: number;
+  passedAttemptsCount?: number;
 }
 
 export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
@@ -37,6 +42,10 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
   exam,
   exams,
   allSubmissions,
+  isRequiredPassEnforced = false,
+  onRetakeExam,
+  requiredPassCount = 1,
+  passedAttemptsCount = 0,
 }) => {
   const [submission, setSubmission] = useState<ExamSubmission>(initialSubmission);
 
@@ -127,6 +136,19 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     (q) => submission.questionResults && submission.questionResults[q.id]?.isCorrect
   ).length;
 
+
+  // Ngăn chặn phím ESC thoát xem lại nếu đang bắt buộc làm đạt đủ số lần
+  useEffect(() => {
+    if (!isRequiredPassEnforced) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' || e.code === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isRequiredPassEnforced]);
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -258,17 +280,53 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
               </button>
             )}
 
-            {/* Nút đóng */}
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-10 h-10 rounded-2xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border border-slate-200 hover:rotate-90 duration-200 shadow-xs shrink-0"
-              title="Đóng xem lại"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            {/* Nút đóng / Nút Làm Lại Đề Thi (nếu chưa đạt đủ số lần yêu cầu thì tắt nút đóng và hiện nút làm lại) */}
+            {isRequiredPassEnforced && onRetakeExam ? (
+              <button
+                type="button"
+                onClick={onRetakeExam}
+                className="px-4 py-2.5 rounded-2xl flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition-all hover:scale-102 cursor-pointer shrink-0 animate-pulse"
+                title="Bấm để làm lại đề thi ngay và hoàn thành yêu cầu của giáo viên"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Làm Lại Đề Thi</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-10 h-10 rounded-2xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border border-slate-200 hover:rotate-90 duration-200 shadow-xs shrink-0"
+                title="Đóng xem lại"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
           </div>
         </header>
+
+        {/* BANNER THÔNG BÁO TIẾN ĐỘ LÀM ĐẠT & BẮT BUỘC LÀM LẠI ĐỀ THI (Requirement 3) */}
+        {isRequiredPassEnforced && (
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-6 py-2.5 flex items-center justify-between gap-4 text-xs font-medium shrink-0 shadow-inner">
+            <div className="flex items-center gap-2">
+              <span className="p-1 rounded-lg bg-white/20">
+                <RotateCcw className="w-4 h-4 text-white animate-spin" style={{ animationDuration: '4s' }} />
+              </span>
+              <span>
+                Yêu cầu làm đạt: <strong>{passedAttemptsCount} / {requiredPassCount} lần</strong>. Em cần bấm nút <strong>"Làm Lại Đề Thi"</strong> để hoàn thành quy định khảo thí của Giáo viên.
+              </span>
+            </div>
+            {onRetakeExam && (
+              <button
+                type="button"
+                onClick={onRetakeExam}
+                className="px-4 py-1.5 rounded-xl bg-white text-amber-900 font-bold text-xs hover:bg-amber-50 shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:scale-102"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Làm Lại Đề Thi Ngay</span>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Modal xác nhận xóa bài thi từ màn hình Review */}
         {isConfirmingDelete && (
@@ -1164,13 +1222,25 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
             <span>•</span>
             <span className="font-semibold text-slate-700">Số câu đúng: {correctCount}/{totalQuestions}.</span>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center gap-1.5"
-          >
-            Đóng Xem Lại
-          </button>
+          {/* Nếu đang áp dụng yêu cầu làm đạt và có hàm làm lại đề: Ẩn nút Đóng Xem Lại, thay bằng nút Làm Lại Đề Thi */}
+          {isRequiredPassEnforced && onRetakeExam ? (
+            <button
+              type="button"
+              onClick={onRetakeExam}
+              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition-all hover:scale-102 flex items-center gap-2 animate-pulse"
+            >
+              <RotateCcw className="w-4 h-4" />
+              <span>Làm Lại Đề Thi</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center gap-1.5"
+            >
+              Đóng Xem Lại
+            </button>
+          )}
         </footer>
       </div>
 

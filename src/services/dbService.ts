@@ -443,6 +443,9 @@ export function toDbExamRow(e: any, _isPartial = false): any {
   if (e.passingScore !== undefined || e.passing_score !== undefined) {
     row.passingScore = Number(e.passingScore ?? e.passing_score ?? 950);
   }
+  if (e.requiredPassCount !== undefined || e.required_pass_count !== undefined) {
+    row.requiredPassCount = Math.max(1, Number(e.requiredPassCount ?? e.required_pass_count ?? 1));
+  }
   if (e.status !== undefined) row.status = e.status || 'published';
   if (e.allowReviewAnswers !== undefined || e.allow_review_answers !== undefined) {
     row.allowReviewAnswers = (e.allowReviewAnswers ?? e.allow_review_answers ?? true) ? 1 : 0;
@@ -960,6 +963,7 @@ export function normalizeExam(row: any): Exam {
     durationMinutes: Number(row.durationMinutes ?? row.duration_minutes ?? 45),
     totalScore: Number(row.totalScore ?? row.total_score ?? 1000),
     passingScore: Number(row.passingScore ?? row.passing_score ?? 950),
+    requiredPassCount: Math.max(1, Number(row.requiredPassCount ?? row.required_pass_count ?? 1)),
     status: row.status || 'published',
     allowReviewAnswers: Boolean(row.allowReviewAnswers ?? row.allow_review_answers ?? 1),
     isPracticeTest: Boolean(row.isPracticeTest ?? row.is_practice_test ?? 0),
@@ -1769,7 +1773,7 @@ export async function getExamWithQuestions(examId: string, forceRefresh = false)
         e.subject AS e_subject, e.grade AS e_grade, e.targetGrades AS e_targetGrades, 
         e.creatorId AS e_creatorId, e.creatorName AS e_creatorName, e.classIds AS e_classIds, 
         e.durationMinutes AS e_durationMinutes, e.totalScore AS e_totalScore, 
-        e.passingScore AS e_passingScore, e.status AS e_status, 
+        e.passingScore AS e_passingScore, e.requiredPassCount AS e_requiredPassCount, e.status AS e_status, 
         e.allowReviewAnswers AS e_allowReviewAnswers, e.isPracticeTest AS e_isPracticeTest, 
         e.practiceRandomCount AS e_practiceRandomCount, e.totalQuestions AS e_totalQuestions,
         e.questionIds AS e_questionIds,
@@ -1818,6 +1822,7 @@ export async function getExamWithQuestions(examId: string, forceRefresh = false)
       durationMinutes: Number(first.e_durationMinutes ?? 45),
       totalScore: Number(first.e_totalScore ?? 1000),
       passingScore: Number(first.e_passingScore ?? 950),
+      requiredPassCount: Math.max(1, Number(first.e_requiredPassCount ?? 1)),
       status: first.e_status || 'published',
       allowReviewAnswers: Boolean(first.e_allowReviewAnswers ?? 1),
       isPracticeTest: Boolean(first.e_isPracticeTest ?? 0),
@@ -3386,7 +3391,8 @@ export async function mergeExams(
   practiceRandomCount?: number,
   selectedSubject?: string,
   passingScore?: number,
-  totalScore?: number
+  totalScore?: number,
+  requiredPassCount?: number
 ): Promise<Exam> {
   const sourceExams: Exam[] =
     Array.isArray(sourceExamsOrIds) && sourceExamsOrIds.length > 0 && typeof sourceExamsOrIds[0] === 'object'
@@ -3447,6 +3453,7 @@ export async function mergeExams(
     durationMinutes: actualDuration,
     totalScore: Number(totalScore) || 1000,
     passingScore: Number(passingScore) || 950,
+    requiredPassCount: Math.max(1, Number(requiredPassCount) || 1),
     status: 'published',
     allowReviewAnswers: true,
     isPracticeTest: Boolean(isPracticeTest),

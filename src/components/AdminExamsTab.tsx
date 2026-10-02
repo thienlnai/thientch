@@ -120,8 +120,44 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
   const [mergeSelectedIds, setMergeSelectedIds] = useState<string[]>([]);
   const [mergeNewTitle, setMergeNewTitle] = useState('');
   const [mergeDuration, setMergeDuration] = useState<number>(60);
+  const [mergePassingScore, setMergePassingScore] = useState<number>(950);
+  const [mergeRequiredPassCount, setMergeRequiredPassCount] = useState<number>(1);
   const [mergeTargetClassIds, setMergeTargetClassIds] = useState<string[]>([]);
   const [isMerging, setIsMerging] = useState(false);
+
+  // Tính toán chính xác số câu hỏi và số điểm từng câu của đề thi gộp (Admin)
+  const mergeSelectedExams = useMemo(() => {
+    return exams.filter((e) => mergeSelectedIds.includes(e.id));
+  }, [exams, mergeSelectedIds]);
+
+  const mergeTotalQuestionsCount = useMemo(() => {
+    const seen = new Set<string>();
+    let count = 0;
+    mergeSelectedExams.forEach((ex) => {
+      if (ex.questions && ex.questions.length > 0) {
+        ex.questions.forEach((q) => {
+          const key = q.id || q.title;
+          if (!seen.has(key)) {
+            seen.add(key);
+            count++;
+          }
+        });
+      } else {
+        count += (ex.totalQuestions || 0);
+      }
+    });
+    return count;
+  }, [mergeSelectedExams]);
+
+  const mergePointsPerQuestion = useMemo(() => {
+    if (mergeTotalQuestionsCount === 0) return 0;
+    return 1000 / mergeTotalQuestionsCount;
+  }, [mergeTotalQuestionsCount]);
+
+  const formattedMergePointsPerQuestion = useMemo(() => {
+    if (mergePointsPerQuestion === 0) return '0';
+    return mergePointsPerQuestion % 1 === 0 ? mergePointsPerQuestion.toString() : mergePointsPerQuestion.toFixed(2);
+  }, [mergePointsPerQuestion]);
 
   const mergeAvailableSubjects = useMemo(() => {
     const set = new Set<string>();
@@ -391,6 +427,8 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
     }
     setMergeNewTitle('Đề Thi Tổng Hợp Khảo Thí IT - Quản Trị Hệ Thống');
     setMergeDuration(60);
+    setMergePassingScore(950);
+    setMergeRequiredPassCount(1);
     setMergeTargetClassIds(classes.map((c) => c.id));
     setIsMergeModalOpen(true);
   };
@@ -418,11 +456,16 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
         mergeTargetClassIds,
         false,
         0,
-        targetSubject
+        targetSubject,
+        Number(mergePassingScore) || 950,
+        1000,
+        Math.max(1, Number(mergeRequiredPassCount) || 1)
       );
       showToast(`Đã gộp thành công ${sourceExams.length} đề thi thành "${mergeNewTitle}"!`);
       setIsMergeModalOpen(false);
       setMergeSelectedIds([]);
+      setMergePassingScore(950);
+      setMergeRequiredPassCount(1);
     } catch {
       showToast('Không thể gộp đề thi. Vui lòng thử lại!', 'error');
     } finally {
@@ -1543,7 +1586,7 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">Thời gian làm bài (Phút) *</label>
                   <input
@@ -1556,15 +1599,77 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-800 mb-1">Người phụ trách</label>
-                  <input
-                    type="text"
-                    disabled
-                    value={`${currentUser.fullName || currentUser.username} (Quản trị viên)`}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-600 text-xs font-semibold"
-                  />
+                  <label className="block font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span>Điểm Đạt</span>
+                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                      {Math.round(((Number(mergePassingScore) || 950) / 1000) * 100)}%
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={mergePassingScore}
+                      onChange={(e) => setMergePassingScore(Number(e.target.value))}
+                      placeholder="950"
+                      className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-purple-50/40 text-xs font-mono font-bold text-purple-900 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <span className="absolute right-2.5 top-2 text-[10px] font-bold text-slate-400">
+                      / 1000đ
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1 flex items-center justify-between">
+                    <span>Số Lần Đạt Yêu Cầu</span>
+                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                      Bắt buộc
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={mergeRequiredPassCount}
+                      onChange={(e) => setMergeRequiredPassCount(Math.max(1, Number(e.target.value) || 1))}
+                      placeholder="1"
+                      className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-purple-50/40 text-xs font-mono font-bold text-purple-900 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <span className="absolute right-2.5 top-2 text-[10px] font-bold text-purple-600">
+                      lần đạt
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              {/* BẢNG TÍNH TOÁN CHÍNH XÁC SỐ ĐIỂM TỪNG CÂU SAU KHI GỘP */}
+              {mergeSelectedIds.length > 0 && (
+                <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50/50 to-purple-50 rounded-2xl border border-purple-200 flex flex-wrap items-center justify-between gap-2.5 text-xs shadow-2xs">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-purple-900">
+                      Tổng số câu sau gộp: <strong className="font-mono text-sm text-purple-950">{mergeTotalQuestionsCount}</strong> câu
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 bg-white border border-purple-300 rounded-lg text-purple-900 font-bold font-mono text-[11px] shadow-2xs flex items-center gap-1">
+                      <span>🎯 Số điểm mỗi câu:</span>
+                      <strong className="text-purple-700 text-xs font-black">
+                        {formattedMergePointsPerQuestion}đ
+                      </strong>
+                    </span>
+                    <span className="px-2.5 py-1 bg-purple-600 text-white rounded-lg font-bold font-mono text-[11px] shadow-2xs">
+                      ✓ Đạt: ≥ {mergePassingScore}đ
+                    </span>
+                    <span className="px-2.5 py-1 bg-purple-100 text-purple-900 border border-purple-300 rounded-lg font-bold font-mono text-[11px] shadow-2xs">
+                      🏆 Cần làm đạt: {mergeRequiredPassCount} lần
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block font-bold text-slate-800 mb-1 flex items-center justify-between">

@@ -76,6 +76,11 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   const [loadingExamId, setLoadingExamId] = useState<string | null>(null);
   const [reviewingSubmission, setReviewingSubmission] = useState<ExamSubmission | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [localSubmissions, setLocalSubmissions] = useState<ExamSubmission[]>(submissions);
+
+  useEffect(() => {
+    setLocalSubmissions(submissions);
+  }, [submissions]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -165,8 +170,8 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
 
   // Lịch sử bài làm của học sinh này
   const studentSubmissions = useMemo(() => {
-    return submissions.filter((s) => s.studentId === student.id);
-  }, [submissions, student.id]);
+    return localSubmissions.filter((s) => s.studentId === student.id);
+  }, [localSubmissions, student.id]);
 
   // ================= 2. THỐNG KÊ SỐ BÀI ĐÃ LÀM & CHƯA LÀM (Requirement B.4) =================
   const attemptedExamIds = useMemo(() => {
@@ -818,10 +823,14 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           attemptNumber={
             studentSubmissions.filter((s) => s.examId === takingExam.id).length + 1
           }
+          previousPassedCount={
+            studentSubmissions.filter((s) => s.examId === takingExam.id && s.isPassed).length
+          }
           onClose={() => setTakingExam(null)}
           onSubmitSuccess={async (submission) => {
             try {
               await addExamSubmission(submission);
+              setLocalSubmissions((prev) => [submission, ...prev.filter((s) => s.id !== submission.id)]);
               showToast(`Đã nộp bài thi thành công! Điểm số: ${submission.score}/1000đ`);
             } catch (err) {
               console.error('Lỗi lưu submission:', err);
@@ -835,13 +844,29 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
         />
       )}
 
-      {/* ================= MODAL XEM LẠI ĐÁP ÁN (Requirement B.2) ================= */}
+      {/* ================= MODAL XEM LẠI ĐÁP ÁN (Requirement B.2 & Requirement 3) ================= */}
       {reviewingSubmission && (
         <ExamReviewModal
           submission={reviewingSubmission}
           allSubmissions={studentSubmissions}
           exams={exams}
+          exam={exams.find((e) => e.id === reviewingSubmission.examId)}
           onClose={() => setReviewingSubmission(null)}
+          onRetakeExam={() => {
+            const examToRetake = exams.find((e) => e.id === reviewingSubmission.examId);
+            if (examToRetake) {
+              setReviewingSubmission(null);
+              setTakingExam(examToRetake);
+            }
+          }}
+          isRequiredPassEnforced={(() => {
+            const ex = exams.find((e) => e.id === reviewingSubmission.examId);
+            const req = Math.max(1, ex?.requiredPassCount || 1);
+            const passed = studentSubmissions.filter((s) => s.examId === reviewingSubmission.examId && s.isPassed).length;
+            return passed < req;
+          })()}
+          requiredPassCount={Math.max(1, exams.find((e) => e.id === reviewingSubmission.examId)?.requiredPassCount || 1)}
+          passedAttemptsCount={studentSubmissions.filter((s) => s.examId === reviewingSubmission.examId && s.isPassed).length}
         />
       )}
     </div>

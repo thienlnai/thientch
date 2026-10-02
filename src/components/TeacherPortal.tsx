@@ -377,6 +377,7 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   const [mergeNewTitle, setMergeNewTitle] = useState('');
   const [mergeDuration, setMergeDuration] = useState<number>(60);
   const [mergePassingScore, setMergePassingScore] = useState<number>(950);
+  const [mergeRequiredPassCount, setMergeRequiredPassCount] = useState<number>(1);
   const [isMerging, setIsMerging] = useState(false);
 
   // Tính toán chính xác số câu hỏi và số điểm từng câu của đề thi gộp
@@ -1006,13 +1007,15 @@ NOTIFY pgrst, 'reload schema';`;
         0,
         targetSubject,
         Number(mergePassingScore) || 950,
-        1000
+        1000,
+        Math.max(1, Number(mergeRequiredPassCount) || 1)
       );
       showToast(`Đã gộp thành công ${selectedSourceExams.length} đề thi thành "${mergeNewTitle}"!`);
       setIsMergeModalOpen(false);
       setMergeSelectedExamIds([]);
       setMergeNewTitle('');
       setMergePassingScore(950);
+      setMergeRequiredPassCount(1);
     } catch {
       showToast('Không thể gộp đề thi. Vui lòng thử lại!', 'error');
     } finally {
@@ -3711,10 +3714,10 @@ NOTIFY pgrst, 'reload schema';`;
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block font-bold text-slate-700 mb-1">
-                    Thời Gian Làm Bài (Phút)
+                    Thời Gian (Phút)
                   </label>
                   <input
                     type="number"
@@ -3726,7 +3729,7 @@ NOTIFY pgrst, 'reload schema';`;
                 </div>
                 <div>
                   <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>Điểm Đạt (Passing Score)</span>
+                    <span>Điểm Đạt</span>
                     <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                       {Math.round(((Number(mergePassingScore) || 950) / 1000) * 100)}%
                     </span>
@@ -3747,6 +3750,29 @@ NOTIFY pgrst, 'reload schema';`;
                     </span>
                   </div>
                 </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Số Lần Đạt Yêu Cầu</span>
+                    <span className="text-[10px] text-purple-700 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                      Bắt buộc
+                    </span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={mergeRequiredPassCount}
+                      onChange={(e) => setMergeRequiredPassCount(Math.max(1, Number(e.target.value) || 1))}
+                      placeholder="1"
+                      className="w-full px-3 py-2 rounded-xl border border-purple-300 bg-purple-50/40 text-xs font-mono font-bold text-purple-900 focus:bg-white focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                    <span className="absolute right-2.5 top-2 text-[10px] font-bold text-purple-600">
+                      lần đạt
+                    </span>
+                  </div>
+                </div>
               </div>
 
               {/* BẢNG TÍNH TOÁN CHÍNH XÁC SỐ ĐIỂM TỪNG CÂU SAU KHI GỘP */}
@@ -3757,7 +3783,7 @@ NOTIFY pgrst, 'reload schema';`;
                       Tổng số câu sau gộp: <strong className="font-mono text-sm text-purple-950">{mergeTotalQuestionsCount}</strong> câu
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-2.5 py-1 bg-white border border-purple-300 rounded-lg text-purple-900 font-bold font-mono text-[11px] shadow-2xs flex items-center gap-1">
                       <span>🎯 Số điểm mỗi câu:</span>
                       <strong className="text-purple-700 text-xs font-black">
@@ -3766,6 +3792,9 @@ NOTIFY pgrst, 'reload schema';`;
                     </span>
                     <span className="px-2.5 py-1 bg-purple-600 text-white rounded-lg font-bold font-mono text-[11px] shadow-2xs">
                       ✓ Đạt: ≥ {mergePassingScore}đ
+                    </span>
+                    <span className="px-2.5 py-1 bg-purple-100 text-purple-900 border border-purple-300 rounded-lg font-bold font-mono text-[11px] shadow-2xs">
+                      🏆 Cần làm đạt: {mergeRequiredPassCount} lần
                     </span>
                   </div>
                 </div>
