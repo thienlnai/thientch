@@ -1438,6 +1438,21 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
             <span className="font-mono text-[11px]">{answeredCount}/{totalQuestions}</span>
           </button>
 
+          {/* Mobile Direct Submit Button (lg:hidden) */}
+          <button
+            type="button"
+            onClick={handleAttemptSubmit}
+            className={`lg:hidden px-2.5 py-1 rounded-lg text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer transition-all active:scale-95 ${
+              isAllAnswered || isTeacherTesting || currentIndex === totalQuestions - 1
+                ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30 ring-2 ring-emerald-400/40 animate-pulse'
+                : 'bg-emerald-600 hover:bg-emerald-700'
+            }`}
+            title="Nộp bài thi"
+          >
+            <Send className="w-3 h-3" />
+            <span>Nộp</span>
+          </button>
+
           {/* Trạng thái Offline-First */}
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
             {isOnline ? (
@@ -2329,16 +2344,46 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   })()}
                 </div>
 
-                <button
-                  type="button"
-                  disabled={currentIndex === totalQuestions - 1}
-                  onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
-                  className="px-3 sm:px-5 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shadow-xs min-h-[40px]"
-                >
-                  <span className="hidden xs:inline">Câu Kế Tiếp</span>
-                  <span className="xs:hidden">Tiếp</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  {/* Nút Câu Kế Tiếp (khi chưa ở câu cuối cùng) */}
+                  {currentIndex < totalQuestions - 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
+                      className="px-3 sm:px-4 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shadow-xs min-h-[40px]"
+                    >
+                      <span className="hidden xs:inline">Câu Kế Tiếp</span>
+                      <span className="xs:hidden">Tiếp</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  )}
+
+                  {/* NÚT NỘP BÀI THI:
+                      - Khi ở câu cuối cùng (currentIndex === totalQuestions - 1): Thay thế hoàn toàn nút Tiếp bị vô hiệu bằng nút Nộp Bài Thi màu xanh lá to rõ
+                      - Khi chưa ở câu cuối trên Mobile (lg:hidden): Luôn có nút Nộp Bài cạnh nút Tiếp để học sinh nộp bài bất kỳ lúc nào
+                  */}
+                  {currentIndex === totalQuestions - 1 ? (
+                    <button
+                      type="button"
+                      onClick={handleAttemptSubmit}
+                      className="px-4 sm:px-6 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-emerald-600/30 transition-all cursor-pointer min-h-[40px] animate-pulse"
+                      title="Nộp bài thi ngay"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>Nộp Bài Thi</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleAttemptSubmit}
+                      className="lg:hidden px-2.5 sm:px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs flex items-center gap-1 shadow-xs cursor-pointer min-h-[40px]"
+                      title="Nộp bài thi"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Nộp Bài</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
