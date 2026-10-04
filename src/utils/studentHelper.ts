@@ -2,7 +2,8 @@ import {
   Student, 
   ExamQuestion, 
   HotspotRegion, 
-  HotspotStudentClick 
+  HotspotStudentClick,
+  ExamSubmission
 } from '../types/index.ts';
 
 /**
@@ -712,4 +713,71 @@ export function isExamVisibleToGrade(
 
   // Học sinh chỉ thấy đề thi khi số khối của lớp trùng với số khối của đề thi
   return allowedGradeNums.has(studentGradeNum);
+}
+
+/**
+ * Thống kê chu kỳ đạt yêu cầu của học sinh cho một đề thi:
+ * - Khi học sinh đã làm đạt rồi (đạt đủ số lần yêu cầu của GV), nếu học sinh bấm vô làm lại,
+ *   số lần làm đạt sẽ được trả về 0 để học sinh làm lại đúng số lần đạt do Giáo Viên yêu cầu.
+ * - Nếu học sinh đang trong chu kỳ làm bài mà chưa hoàn thành (chưa đạt đủ số lần yêu cầu),
+ *   số lần làm đạt tiếp tục được tích lũy cho đến khi đạt đủ.
+ */
+export interface ExamPassCycleStats {
+  targetPassCount: number;
+  currentCyclePassedCount: number;
+  isLatestCycleCompleted: boolean;
+  totalAttempts: number;
+  totalPassedCount: number;
+  retakeStartPassedCount: number;
+}
+
+export function getExamPassCycleStats(
+  submissions: ExamSubmission[],
+  examId: string,
+  studentId: string,
+  requiredPassCount?: number
+): ExamPassCycleStats {
+  const targetPassCount = Math.max(1, requiredPassCount || 1);
+  const examSubs = (submissions || [])
+    .filter((s) => s.examId === examId && s.studentId === studentId)
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+
+  if (examSubs.length === 0) {
+    return {
+      targetPassCount,
+      currentCyclePassedCount: 0,
+      isLatestCycleCompleted: false,
+      totalAttempts: 0,
+      totalPassedCount: 0,
+      retakeStartPassedCount: 0,
+    };
+  }
+
+  let cyclePassCount = 0;
+  let cycleCompleted = false;
+
+  for (const s of examSubs) {
+    // Nếu chu kỳ trước đã hoàn thành đủ số lần đạt, bài làm tiếp theo sẽ bắt đầu chu kỳ mới (reset về 0)
+    if (cycleCompleted) {
+      cyclePassCount = 0;
+      cycleCompleted = false;
+    }
+
+    if (s.isPassed) {
+      cyclePassCount += 1;
+      if (cyclePassCount >= targetPassCount) {
+        cycleCompleted = true;
+      }
+    }
+  }
+
+  return {
+    targetPassCount,
+    currentCyclePassedCount: cyclePassCount,
+    isLatestCycleCompleted: cycleCompleted,
+    totalAttempts: examSubs.length,
+    totalPassedCount: examSubs.filter((s) => s.isPassed).length,
+    // Khi đề thi học sinh đã làm đạt rồi mà bấm vô làm lại -> trả về số lần làm đạt là 0
+    retakeStartPassedCount: cycleCompleted ? 0 : cyclePassCount,
+  };
 }

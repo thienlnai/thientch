@@ -36,7 +36,8 @@ import { addExamSubmission, getExamWithQuestions } from '../services/dbService.t
 import { 
   isExamVisibleToGrade, 
   getClassGradeNumber, 
-  formatGradeLabel 
+  formatGradeLabel,
+  getExamPassCycleStats
 } from '../utils/studentHelper.ts';
 import { ExamTakingModal } from './ExamTakingModal.tsx';
 import { Pagination } from './Pagination.tsx';
@@ -872,60 +873,79 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
       </div>
 
       {/* ================= MODAL LÀM BÀI THI CHỐNG GIAN LẬN (Requirement B.5) ================= */}
-      {takingExam && (
-        <ExamTakingModal
-          exam={takingExam}
-          currentUser={student}
-          isTeacherTesting={false}
-          attemptNumber={
-            studentSubmissions.filter((s) => s.examId === takingExam.id).length + 1
-          }
-          previousPassedCount={
-            studentSubmissions.filter((s) => s.examId === takingExam.id && s.isPassed).length
-          }
-          onClose={() => setTakingExam(null)}
-          onSubmitSuccess={async (submission) => {
-            try {
-              await addExamSubmission(submission);
-              setLocalSubmissions((prev) => [submission, ...prev.filter((s) => s.id !== submission.id)]);
-              showToast(`Đã nộp bài thi thành công! Điểm số: ${submission.score}/1000đ`);
-            } catch (err) {
-              console.error('Lỗi lưu submission:', err);
-              throw err;
+      {takingExam && (() => {
+        const cycleStats = getExamPassCycleStats(
+          studentSubmissions,
+          takingExam.id,
+          student.id,
+          takingExam.requiredPassCount
+        );
+
+        return (
+          <ExamTakingModal
+            exam={takingExam}
+            currentUser={student}
+            isTeacherTesting={false}
+            attemptNumber={
+              studentSubmissions.filter((s) => s.examId === takingExam.id).length + 1
             }
-          }}
-          onReviewAnswers={(submission) => {
-            setTakingExam(null);
-            setReviewingSubmission(submission);
-          }}
-        />
-      )}
+            previousPassedCount={cycleStats.retakeStartPassedCount}
+            onClose={() => setTakingExam(null)}
+            onSubmitSuccess={async (submission) => {
+              try {
+                await addExamSubmission(submission);
+                setLocalSubmissions((prev) => [submission, ...prev.filter((s) => s.id !== submission.id)]);
+                showToast(`Đã nộp bài thi thành công! Điểm số: ${submission.score}/1000đ`);
+              } catch (err) {
+                console.error('Lỗi lưu submission:', err);
+                throw err;
+              }
+            }}
+            onReviewAnswers={(submission) => {
+              setTakingExam(null);
+              setReviewingSubmission(submission);
+            }}
+          />
+        );
+      })()}
 
       {/* ================= MODAL XEM LẠI ĐÁP ÁN (Requirement B.2 & Requirement 3) ================= */}
-      {reviewingSubmission && (
-        <ExamReviewModal
-          submission={reviewingSubmission}
-          allSubmissions={studentSubmissions}
-          exams={exams}
-          exam={exams.find((e) => e.id === reviewingSubmission.examId)}
-          onClose={() => setReviewingSubmission(null)}
-          onRetakeExam={() => {
-            const examToRetake = exams.find((e) => e.id === reviewingSubmission.examId);
-            if (examToRetake) {
-              setReviewingSubmission(null);
-              setTakingExam(examToRetake);
-            }
-          }}
-          isRequiredPassEnforced={(() => {
-            const ex = exams.find((e) => e.id === reviewingSubmission.examId);
-            const req = Math.max(1, ex?.requiredPassCount || 1);
-            const passed = studentSubmissions.filter((s) => s.examId === reviewingSubmission.examId && s.isPassed).length;
-            return passed < req;
-          })()}
-          requiredPassCount={Math.max(1, exams.find((e) => e.id === reviewingSubmission.examId)?.requiredPassCount || 1)}
-          passedAttemptsCount={studentSubmissions.filter((s) => s.examId === reviewingSubmission.examId && s.isPassed).length}
-        />
-      )}
+      {reviewingSubmission && (() => {
+        const targetExam = exams.find((e) => e.id === reviewingSubmission.examId);
+        const reqPass = Math.max(1, targetExam?.requiredPassCount || 1);
+        const cycleStats = getExamPassCycleStats(
+          studentSubmissions,
+          reviewingSubmission.examId,
+          student.id,
+          reqPass
+        );
+
+        // Bắt buộc làm đạt nếu bài thi đang xem là Chưa Đạt (isPassed: false) HOẶC chu kỳ hiện tại chưa hoàn thành
+        const isEnforced = !reviewingSubmission.isPassed || !cycleStats.isLatestCycleCompleted;
+        // Số lần đạt hiển thị trong banner
+        const passedCountToDisplay = reviewingSubmission.isPassed
+          ? Math.max(1, cycleStats.currentCyclePassedCount || (cycleStats.isLatestCycleCompleted ? reqPass : 1))
+          : cycleStats.currentCyclePassedCount;
+
+        return (
+          <ExamReviewModal
+            submission={reviewingSubmission}
+            allSubmissions={studentSubmissions}
+            exams={exams}
+            exam={targetExam}
+            onClose={() => setReviewingSubmission(null)}
+            onRetakeExam={() => {
+              if (targetExam) {
+                setReviewingSubmission(null);
+                setTakingExam(targetExam);
+              }
+            }}
+            isRequiredPassEnforced={isEnforced}
+            requiredPassCount={reqPass}
+            passedAttemptsCount={passedCountToDisplay}
+          />
+        );
+      })()}
     </div>
   );
 };

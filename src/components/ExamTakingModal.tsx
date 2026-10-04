@@ -102,11 +102,16 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     );
   });
 
+  const targetPassCount = Math.max(1, exam.requiredPassCount || 1);
+  // Khi đề thi học sinh đã làm đạt rồi mà bấm vô làm lại, trả về số lần làm đạt là 0 để học sinh làm lại đúng số lần đạt do Giáo Viên yêu cầu
+  const initialPassedCount = (previousPassedCount !== undefined && previousPassedCount >= targetPassCount)
+    ? 0
+    : Math.max(0, previousPassedCount || 0);
+
   const [attemptNumberState, setAttemptNumberState] = useState<number>(attemptNumber || 1);
-  const [passedAttemptsCount, setPassedAttemptsCount] = useState<number>(previousPassedCount || 0);
+  const [passedAttemptsCount, setPassedAttemptsCount] = useState<number>(initialPassedCount);
   const [isReviewingInline, setIsReviewingInline] = useState<boolean>(false);
 
-  const targetPassCount = Math.max(1, exam.requiredPassCount || 1);
   const isRequirementMet = isTeacherTesting || (passedAttemptsCount >= targetPassCount);
   const passesRemaining = Math.max(0, targetPassCount - passedAttemptsCount);
 
@@ -159,6 +164,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     setTimeRemaining(exam.durationMinutes * 60);
     setViolationCount(0);
     setViolationLogs([]);
+    // Khi đề thi đã làm đạt rồi mà bấm vô làm lại, trả về số lần làm đạt là 0 để học sinh làm lại đúng số lần đạt do GV yêu cầu
+    if (passedAttemptsCount >= targetPassCount) {
+      setPassedAttemptsCount(0);
+    }
     setShuffledQuestions(
       shuffleExamQuestionsAndOptions(
         exam.questions,

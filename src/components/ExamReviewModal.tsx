@@ -3,6 +3,7 @@ import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
 import { getExamWithQuestions } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
+import { getExamPassCycleStats } from '../utils/studentHelper.ts';
 import { 
   X, 
   Award, 
@@ -153,10 +154,38 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     (q) => submission.questionResults && submission.questionResults[q.id]?.isCorrect
   ).length;
 
+  const currentExam = loadedExam || exam || (exams ? exams.find((e) => e.id === submission.examId) : undefined);
+  const targetReqPass = Math.max(1, currentExam?.requiredPassCount || requiredPassCount || 1);
+
+  const cycleStats = useMemo(() => {
+    if (!allSubmissions || allSubmissions.length === 0) return null;
+    return getExamPassCycleStats(
+      allSubmissions,
+      submission.examId,
+      submission.studentId,
+      targetReqPass
+    );
+  }, [allSubmissions, submission.examId, submission.studentId, targetReqPass]);
+
+  // Xác định xem lần thi này có bắt buộc làm đạt hay không:
+  const isEnforced = useMemo(() => {
+    if (isRequiredPassEnforced) return true;
+    if (!submission.isPassed && targetReqPass >= 1) return true;
+    if (cycleStats && !cycleStats.isLatestCycleCompleted) return true;
+    return false;
+  }, [isRequiredPassEnforced, submission.isPassed, targetReqPass, cycleStats]);
+
+  const currentPassCount = useMemo(() => {
+    if (cycleStats) {
+      if (!submission.isPassed) return cycleStats.currentCyclePassedCount;
+      return cycleStats.currentCyclePassedCount || (cycleStats.isLatestCycleCompleted ? targetReqPass : 1);
+    }
+    return passedAttemptsCount;
+  }, [cycleStats, submission.isPassed, passedAttemptsCount, targetReqPass]);
 
   // Ngăn chặn phím ESC thoát xem lại nếu đang bắt buộc làm đạt đủ số lần
   useEffect(() => {
-    if (!isRequiredPassEnforced) return;
+    if (!isEnforced) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' || e.code === 'Escape') {
         e.preventDefault();
@@ -165,7 +194,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isRequiredPassEnforced]);
+  }, [isEnforced]);
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -238,7 +267,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
               )}
 
               {/* Nút đóng / Nút Làm Lại Đề Thi */}
-              {isRequiredPassEnforced && onRetakeExam ? (
+              {isEnforced && onRetakeExam ? (
                 <button
                   type="button"
                   onClick={onRetakeExam}
@@ -318,14 +347,14 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         </header>
 
         {/* BANNER THÔNG BÁO TIẾN ĐỘ LÀM ĐẠT & BẮT BUỘC LÀM LẠI ĐỀ THI (Requirement 3) */}
-        {isRequiredPassEnforced && (
+        {isEnforced && (
           <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-4 text-xs font-medium shrink-0 shadow-inner">
             <div className="flex items-center gap-2 min-w-0">
               <span className="p-1 rounded-lg bg-white/20 shrink-0">
                 <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin" style={{ animationDuration: '4s' }} />
               </span>
               <span className="truncate sm:whitespace-normal">
-                Yêu cầu đạt: <strong>{passedAttemptsCount}/{requiredPassCount} lần</strong>. Em cần làm lại đề thi để hoàn thành.
+                Yêu cầu đạt: <strong>{currentPassCount}/{targetReqPass} lần</strong>. Em cần làm lại đề thi để hoàn thành.
               </span>
             </div>
             {onRetakeExam && (
@@ -1375,7 +1404,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
                 <span>Câu sau</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
-            ) : isRequiredPassEnforced && onRetakeExam ? (
+            ) : isEnforced && onRetakeExam ? (
               <button
                 type="button"
                 onClick={onRetakeExam}
@@ -1406,7 +1435,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
               <span className="font-semibold text-slate-700">Đúng: {correctCount}/{totalQuestions} câu</span>
             </div>
             {/* Nếu đang áp dụng yêu cầu làm đạt và có hàm làm lại đề: Ẩn nút Đóng Xem Lại, thay bằng nút Làm Lại Đề Thi */}
-            {isRequiredPassEnforced && onRetakeExam ? (
+            {isEnforced && onRetakeExam ? (
               <button
                 type="button"
                 onClick={onRetakeExam}

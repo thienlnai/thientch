@@ -581,6 +581,7 @@ export async function initTursoSchema(client: Client = turso, force = false): Pr
       durationMinutes INTEGER DEFAULT 45,
       totalScore INTEGER DEFAULT 1000,
       passingScore INTEGER DEFAULT 950,
+      requiredPassCount INTEGER DEFAULT 1,
       status TEXT DEFAULT 'published',
       allowReviewAnswers INTEGER DEFAULT 1,
       isPracticeTest INTEGER DEFAULT 0,
@@ -818,6 +819,7 @@ export async function initTursoSchema(client: Client = turso, force = false): Pr
       `ALTER TABLE students ADD COLUMN schoolId TEXT`,
       `ALTER TABLE exam_questions ADD COLUMN examId TEXT`,
       `ALTER TABLE question_bank ADD COLUMN examId TEXT`,
+      `ALTER TABLE exams ADD COLUMN requiredPassCount INTEGER DEFAULT 1`,
     ];
     for (const m of migrations) {
       try {
