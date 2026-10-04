@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
 import { getExamWithQuestions } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
@@ -64,6 +64,23 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
   const [selectedQuestionIndex, setSelectedQuestionIndex] = useState(0);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const [loadedExam, setLoadedExam] = useState<Exam | null>(null);
+
+  // Tham chiếu DOM cho thanh chọn câu hỏi di động và vùng nội dung câu hỏi
+  const questionStripRef = useRef<HTMLDivElement>(null);
+  const mainContentRef = useRef<HTMLElement>(null);
+
+  // Tự động cuộn nội dung lên đầu trang và đưa số câu đang chọn vào trung tâm thanh cuộn
+  useEffect(() => {
+    if (mainContentRef.current) {
+      mainContentRef.current.scrollTop = 0;
+    }
+    if (questionStripRef.current) {
+      const activeEl = questionStripRef.current.children[selectedQuestionIndex] as HTMLElement;
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
+    }
+  }, [selectedQuestionIndex]);
 
   // Lightbox Zoom state for review images
   const [lightboxImage, setLightboxImage] = useState<{ url: string; title: string } | null>(null);
@@ -151,178 +168,174 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
   }, [isRequiredPassEnforced]);
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-5xl h-[96vh] sm:h-[92vh] bg-white rounded-2xl sm:rounded-3xl shadow-2xl shadow-indigo-950/15 flex flex-col overflow-hidden border border-slate-200/90">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-5xl h-[100dvh] sm:h-[92vh] bg-white rounded-none sm:rounded-3xl shadow-2xl shadow-indigo-950/15 flex flex-col overflow-hidden border-0 sm:border border-slate-200/90">
         
-        {/* ================= HEADER TÔNG SÁNG CAO CẤP ================= */}
-        <header className="px-3 sm:px-6 py-2.5 sm:py-4 bg-gradient-to-r from-white via-indigo-50/30 to-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0 gap-2 sm:gap-4 shadow-xs">
-          {/* Góc trái: Phân cấp thông tin rõ ràng */}
-          <div className="flex items-center gap-2 sm:gap-3.5 min-w-0 pr-1 sm:pr-2">
-            <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-bold text-base sm:text-lg shadow-md shrink-0 transition-transform hover:scale-105 ${
-              submission.isPassed 
-                ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-emerald-500/25 ring-2 sm:ring-4 ring-emerald-50' 
-                : 'bg-gradient-to-tr from-rose-500 to-red-400 text-white shadow-rose-500/25 ring-2 sm:ring-4 ring-rose-50'
-            }`}>
-              <Award className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
-            </div>
-            <div className="min-w-0">
-              {/* Tên bài thi làm nổi bật kèm Badge "✓ ĐẠT (≥950đ)" màu xanh ngọc */}
-              <div className="flex items-center gap-2 sm:gap-2.5">
-                <h2 className="text-sm sm:text-lg font-black text-slate-900 truncate">
-                  {submission.examTitle}
-                </h2>
-                <span className={`px-2 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-bold shrink-0 shadow-xs inline-flex items-center gap-1 ${
-                  submission.isPassed 
-                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
-                    : 'bg-rose-100 text-rose-800 border border-rose-300'
-                }`}>
-                  {submission.isPassed ? '✓ ĐẠT' : '✕ CHƯA ĐẠT'}
-                </span>
+        {/* ================= HEADER TÔNG SÁNG CAO CẤP (TỐI ƯU TOÀN DIỆN CHO CẢ ĐIỆN THOẠI DỌC & MÁY TÍNH) ================= */}
+        <header className="px-3 sm:px-6 py-2 sm:py-3.5 bg-gradient-to-r from-white via-indigo-50/20 to-slate-50 border-b border-slate-200 shrink-0 shadow-xs">
+          {/* Hàng 1: Tiêu đề bài thi, Huy hiệu kết quả, Điểm số và Nút đóng / Nút làm lại */}
+          <div className="flex items-center justify-between gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className={`w-8 h-8 sm:w-11 sm:h-11 rounded-xl sm:rounded-2xl flex items-center justify-center font-bold text-sm sm:text-base shadow-sm shrink-0 ${
+                submission.isPassed 
+                  ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-emerald-500/25 ring-2 ring-emerald-50' 
+                  : 'bg-gradient-to-tr from-rose-500 to-red-400 text-white shadow-rose-500/25 ring-2 ring-rose-50'
+              }`}>
+                <Award className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
-
-              {/* Thông tin thí sinh & Thời gian gom gọn gàng thành các Chip thông tin nhỏ */}
-              <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600 mt-1.5">
-                <span className="font-semibold text-slate-700 bg-slate-100/90 hover:bg-slate-200/70 transition-colors px-2.5 py-0.5 rounded-lg border border-slate-200">
-                  Thí sinh: <strong className="font-bold text-slate-900">{submission.studentName || 'Học sinh'}</strong>{' '}
-                  <span className="text-slate-500 font-mono">(SBD: {submission.studentCode || 'HS501475'})</span>
-                </span>
-                <span className="text-slate-300 hidden sm:inline">|</span>
-                <span className="flex items-center gap-1 text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200">
-                  <Calendar className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Ngày thi: {new Date(submission.submittedAt).toLocaleDateString('vi-VN')} {new Date(submission.submittedAt).toLocaleTimeString('vi-VN')}</span>
-                </span>
-                <span className="text-slate-300 hidden sm:inline">|</span>
-                <span className="flex items-center gap-1 text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200">
-                  <Clock className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Thời gian: {Math.floor(submission.timeSpentSeconds / 60)}p {submission.timeSpentSeconds % 60}s</span>
-                </span>
-                <span className="text-slate-300 hidden sm:inline">|</span>
-                <span className="text-slate-600 bg-slate-100/90 px-2.5 py-0.5 rounded-lg border border-slate-200 font-bold text-indigo-700">
-                  Lần thi #{submission.attemptNumber}
-                </span>
-              </div>
-
-              {/* BỘ CHỌN LẦN LÀM BÀI ĐỂ HIỂN THỊ TẤT CẢ SỐ LẦN ĐÃ LÀM CỦA ĐỀ THI */}
-              {relatedAttempts.length > 1 && (
-                <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-slate-100 flex-wrap animate-in fade-in">
-                  <span className="text-[11px] font-black text-indigo-700 uppercase tracking-wider">
-                    Các lần đã làm ({relatedAttempts.length} lần):
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <h2 className="text-xs sm:text-base font-black text-slate-900 truncate max-w-[170px] sm:max-w-md" title={submission.examTitle}>
+                    {submission.examTitle}
+                  </h2>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold shrink-0 shadow-2xs inline-flex items-center gap-0.5 sm:gap-1 ${
+                    submission.isPassed 
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
+                      : 'bg-rose-100 text-rose-800 border border-rose-300'
+                  }`}>
+                    {submission.isPassed ? '✓ ĐẠT' : '✕ CHƯA ĐẠT'}
                   </span>
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {relatedAttempts.map((att) => {
-                      const isSelected = att.id === submission.id;
-                      return (
-                        <button
-                          key={att.id}
-                          type="button"
-                          onClick={() => {
-                            setSubmission(att);
-                            setSelectedQuestionIndex(0);
-                          }}
-                          className={`px-3 py-1 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer flex items-center gap-1.5 ${
-                            isSelected
-                              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 ring-2 ring-indigo-400'
-                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          <span>Lần #{att.attemptNumber}</span>
-                          <span className={`text-[10px] font-semibold ${isSelected ? 'text-indigo-200' : 'text-slate-500'}`}>
-                            • {att.score}đ {att.isPassed ? '✓' : '✕'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
                 </div>
+              </div>
+            </div>
+
+            {/* Khối Điểm số & Nút hành động góc phải */}
+            <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+              <div className={`px-2 sm:px-4 py-1 sm:py-2 rounded-xl sm:rounded-2xl border flex items-center sm:flex-col sm:items-end justify-center shadow-xs transition-all gap-1 sm:gap-0 ${
+                submission.isPassed 
+                  ? 'bg-gradient-to-br from-emerald-500 to-teal-600 text-white border-emerald-400 shadow-emerald-500/20' 
+                  : 'bg-gradient-to-br from-rose-500 to-red-600 text-white border-rose-400 shadow-rose-500/20'
+              }`}>
+                <div className="flex items-baseline gap-0.5 sm:gap-1">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100 hidden md:inline">
+                    Điểm:
+                  </span>
+                  <span className="text-sm sm:text-2xl font-black font-mono tracking-tight text-white">
+                    {submission.score}
+                  </span>
+                  <span className="text-[9px] sm:text-xs font-bold text-white/80 font-mono">
+                    /1000đ
+                  </span>
+                </div>
+                <div className="hidden sm:block">
+                  <span className="text-[10px] text-white/90 font-medium">
+                    {correctCount}/{totalQuestions} câu đúng
+                  </span>
+                </div>
+              </div>
+
+              {/* Nút Xóa bài thi (dành cho Giáo viên / Quản trị viên) */}
+              {onDelete && (
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmingDelete(true)}
+                  className="p-1.5 sm:px-3 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-all cursor-pointer border border-red-200 text-xs font-bold shadow-xs shrink-0"
+                  title="Xóa bài thi này của học sinh khỏi hệ thống"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Xóa</span>
+                </button>
+              )}
+
+              {/* Nút đóng / Nút Làm Lại Đề Thi */}
+              {isRequiredPassEnforced && onRetakeExam ? (
+                <button
+                  type="button"
+                  onClick={onRetakeExam}
+                  className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl flex items-center gap-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-[11px] sm:text-xs shadow-md shadow-indigo-600/25 transition-all cursor-pointer shrink-0 animate-pulse"
+                  title="Bấm để làm lại đề thi ngay"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden xs:inline">Làm Lại</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border border-slate-200 shadow-2xs shrink-0"
+                  title="Đóng xem lại"
+                >
+                  <X className="w-4 h-4 sm:w-5 sm:h-5" />
+                </button>
               )}
             </div>
           </div>
 
-          {/* ================= GÓC PHẢI: KHỐI TỔNG KẾT ĐIỂM SỐ CARD MÀU XANH LÁ RỰC RỠ ================= */}
-          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-            <div className={`px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl border flex flex-col items-end justify-center shadow-lg transition-all ${
-              submission.isPassed 
-                ? 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 text-white border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-300/40' 
-                : 'bg-gradient-to-br from-rose-500 via-rose-600 to-red-600 text-white border-rose-400 shadow-rose-500/25 ring-2 ring-rose-300/40'
-            }`}>
-              {/* 1. Điểm số nổi bật to rõ, thấy ngay kết quả xuất sắc trong 1 giây */}
-              <div className="flex items-baseline gap-1">
-                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-100 hidden sm:inline">
-                  Điểm Đạt:
-                </span>
-                <span className="text-xl sm:text-4xl font-black font-mono tracking-tight text-white drop-shadow-sm">
-                  {submission.score}
-                </span>
-                <span className="text-[10px] sm:text-xs font-bold text-emerald-100 font-mono">
-                  / 1000đ
-                </span>
-              </div>
+          {/* Hàng 2: Thanh thông tin chi tiết (Cuộn ngang êm ái trên màn hình điện thoại) */}
+          <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] text-slate-600 mt-2 overflow-x-auto pb-0.5 sm:pb-0 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden shrink-0">
+            <span className="font-semibold text-slate-700 bg-slate-100/90 px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
+              {submission.studentName || 'Học sinh'} <span className="text-slate-500 font-mono">({submission.studentCode || 'HS'})</span>
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 bg-slate-100/90 px-2 py-0.5 rounded-lg border border-slate-200 shrink-0">
+              <Clock className="w-3 h-3 text-indigo-500" />
+              <span>{Math.floor(submission.timeSpentSeconds / 60)}p {submission.timeSpentSeconds % 60}s</span>
+            </span>
+            <span className="flex items-center gap-1 text-slate-600 bg-slate-100/90 px-2 py-0.5 rounded-lg border border-slate-200 shrink-0 font-bold text-indigo-700">
+              Lần #{submission.attemptNumber}
+            </span>
+            <span className="flex items-center gap-1 text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200 shrink-0 font-bold">
+              ✓ {correctCount}/{totalQuestions} câu đúng
+            </span>
+            <span className="flex items-center gap-1 text-slate-500 bg-slate-100/90 px-2 py-0.5 rounded-lg border border-slate-200 shrink-0 hidden sm:inline-flex">
+              <Calendar className="w-3 h-3 text-indigo-500" />
+              <span>{new Date(submission.submittedAt).toLocaleDateString('vi-VN')}</span>
+            </span>
+          </div>
 
-              {/* 2. Số câu đúng 1 / 1 câu với pill tương phản bắt mắt */}
-              <div className="mt-0.5 sm:mt-1">
-                <span className="px-2 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-bold font-mono inline-flex items-center gap-1 shadow-xs bg-white/20 backdrop-blur-xs text-white border border-white/30">
-                  <CheckCircle2 className="w-3 h-3 text-white shrink-0" />
-                  <span><span className="hidden sm:inline">Số câu đúng: </span><strong className="font-black text-xs sm:text-sm text-white">{correctCount}</strong>/{totalQuestions}<span className="hidden sm:inline"> câu</span></span>
-                </span>
+          {/* BỘ CHỌN LẦN LÀM BÀI NẾU CÓ NHIỀU LẦN THI */}
+          {relatedAttempts.length > 1 && (
+            <div className="flex items-center gap-1.5 sm:gap-2 mt-2 pt-1.5 border-t border-slate-100 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+              <span className="text-[10px] sm:text-[11px] font-black text-indigo-700 uppercase tracking-wider shrink-0">
+                Các lần làm:
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {relatedAttempts.map((att) => {
+                  const isSelected = att.id === submission.id;
+                  return (
+                    <button
+                      key={att.id}
+                      type="button"
+                      onClick={() => {
+                        setSubmission(att);
+                        setSelectedQuestionIndex(0);
+                      }}
+                      className={`px-2.5 py-0.5 sm:py-1 rounded-lg sm:rounded-xl text-[11px] font-bold font-mono transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+                        isSelected
+                          ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-400'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200'
+                      }`}
+                    >
+                      <span>Lần #{att.attemptNumber}</span>
+                      <span className={`text-[10px] ${isSelected ? 'text-indigo-200' : 'text-slate-500'}`}>
+                        • {att.score}đ
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
-
-            {/* Nút Xóa bài thi (dành cho Giáo viên / Quản trị viên) */}
-            {onDelete && (
-              <button
-                type="button"
-                onClick={() => setIsConfirmingDelete(true)}
-                className="px-3 py-2 rounded-2xl flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 transition-all cursor-pointer border border-red-200 text-xs font-bold shadow-xs shrink-0"
-                title="Xóa bài thi này của học sinh khỏi hệ thống"
-              >
-                <Trash2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Xóa Bài Thi</span>
-              </button>
-            )}
-
-            {/* Nút đóng / Nút Làm Lại Đề Thi (nếu chưa đạt đủ số lần yêu cầu thì tắt nút đóng và hiện nút làm lại) */}
-            {isRequiredPassEnforced && onRetakeExam ? (
-              <button
-                type="button"
-                onClick={onRetakeExam}
-                className="px-4 py-2.5 rounded-2xl flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs shadow-md shadow-indigo-600/25 transition-all hover:scale-102 cursor-pointer shrink-0 animate-pulse"
-                title="Bấm để làm lại đề thi ngay và hoàn thành yêu cầu của giáo viên"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span>Làm Lại Đề Thi</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onClose}
-                className="w-10 h-10 rounded-2xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-all cursor-pointer border border-slate-200 hover:rotate-90 duration-200 shadow-xs shrink-0"
-                title="Đóng xem lại"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+          )}
         </header>
 
         {/* BANNER THÔNG BÁO TIẾN ĐỘ LÀM ĐẠT & BẮT BUỘC LÀM LẠI ĐỀ THI (Requirement 3) */}
         {isRequiredPassEnforced && (
-          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-6 py-2.5 flex items-center justify-between gap-4 text-xs font-medium shrink-0 shadow-inner">
-            <div className="flex items-center gap-2">
-              <span className="p-1 rounded-lg bg-white/20">
-                <RotateCcw className="w-4 h-4 text-white animate-spin" style={{ animationDuration: '4s' }} />
+          <div className="bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white px-3 sm:px-6 py-2 sm:py-2.5 flex items-center justify-between gap-2 sm:gap-4 text-xs font-medium shrink-0 shadow-inner">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="p-1 rounded-lg bg-white/20 shrink-0">
+                <RotateCcw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-spin" style={{ animationDuration: '4s' }} />
               </span>
-              <span>
-                Yêu cầu làm đạt: <strong>{passedAttemptsCount} / {requiredPassCount} lần</strong>. Em cần bấm nút <strong>"Làm Lại Đề Thi"</strong> để hoàn thành quy định khảo thí của Giáo viên.
+              <span className="truncate sm:whitespace-normal">
+                Yêu cầu đạt: <strong>{passedAttemptsCount}/{requiredPassCount} lần</strong>. Em cần làm lại đề thi để hoàn thành.
               </span>
             </div>
             {onRetakeExam && (
               <button
                 type="button"
                 onClick={onRetakeExam}
-                className="px-4 py-1.5 rounded-xl bg-white text-amber-900 font-bold text-xs hover:bg-amber-50 shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:scale-102"
+                className="px-3 sm:px-4 py-1.5 rounded-xl bg-white text-amber-900 font-bold text-xs hover:bg-amber-50 shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer hover:scale-102"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
-                <span>Làm Lại Đề Thi Ngay</span>
+                <span>Làm Lại Ngay</span>
               </button>
             )}
           </div>
@@ -378,29 +391,29 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         )}
 
 
-        {/* ================= 2. THÔNG BÁO AN NINH PHÒNG THI (ALERT BANNER NHẸ NHÀNG KHI 0 LẦN VI PHẠM) ================= */}
+        {/* ================= 2. THÔNG BÁO AN NINH PHÒNG THI ================= */}
         {submission.violationCount > 0 ? (
-          <div className="px-6 py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-xs sm:text-sm font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 shrink-0 border-b border-red-700 shadow-md shadow-red-500/15">
+          <div className="px-3 sm:px-6 py-2 sm:py-2.5 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 text-white text-xs sm:text-sm font-bold flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-2 shrink-0 border-b border-red-700 shadow-xs">
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-white/20 text-white flex items-center justify-center shrink-0">
-                <ShieldAlert className="w-4 h-4" />
+              <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 text-white flex items-center justify-center shrink-0">
+                <ShieldAlert className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </div>
-              <span>
-                ⚠️ <strong>CẢNH BÁO QUY CHẾ:</strong> Thí sinh đã vi phạm quy chế thi{' '}
-                <span className="underline decoration-2 font-mono font-black text-sm bg-black/25 px-2 py-0.5 rounded shadow-xs">
+              <span className="text-[11px] sm:text-xs">
+                ⚠️ <strong>CẢNH BÁO QUY CHẾ:</strong> Vi phạm quy chế thi{' '}
+                <span className="underline decoration-2 font-mono font-black bg-black/25 px-1.5 py-0.5 rounded shadow-xs">
                   {submission.violationCount} lần
                 </span>{' '}
-                (nhấn chuột phải, F12, rời khỏi màn hình bài thi...).
+                (nhấn chuột phải, F12, rời màn hình...).
               </span>
             </div>
 
             {submission.violationLogs && submission.violationLogs.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 self-stretch sm:self-auto max-h-14 overflow-y-auto">
-                <span className="text-[11px] text-white/90 font-bold shrink-0">Chi tiết:</span>
+              <div className="flex flex-wrap items-center gap-1 self-stretch sm:self-auto max-h-12 overflow-y-auto">
+                <span className="text-[10px] sm:text-[11px] text-white/90 font-bold shrink-0">Chi tiết:</span>
                 {submission.violationLogs.map((log, idx) => (
                   <span
                     key={log.id || idx}
-                    className="px-2 py-0.5 rounded-md bg-black/25 text-white font-mono text-[10px] border border-white/25 shrink-0 shadow-xs"
+                    className="px-1.5 py-0.5 rounded bg-black/25 text-white font-mono text-[9px] sm:text-[10px] border border-white/25 shrink-0"
                     title={`${log.time}: ${log.label}`}
                   >
                     ⏱️ {log.time}: {log.label}
@@ -410,22 +423,89 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
             )}
           </div>
         ) : (
-          <div className="px-6 py-2 bg-emerald-50/70 border-b border-emerald-200/80 text-emerald-900 text-xs sm:text-sm font-medium flex items-center justify-between shrink-0 shadow-xs">
-            <div className="flex items-center gap-2.5">
-              <div className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-300/70 shadow-xs">
-                <ShieldAlert className="w-4 h-4" />
+          <div className="px-3 sm:px-6 py-1.5 sm:py-2 bg-emerald-50/70 border-b border-emerald-200/80 text-emerald-900 text-[11px] sm:text-xs font-medium flex items-center justify-between shrink-0 shadow-xs">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 border border-emerald-300">
+                <ShieldAlert className="w-3.5 h-3.5" />
               </div>
-              <span>
-                <strong className="text-emerald-950 font-bold">An ninh phòng thi:</strong> Số lần vi phạm quy chế:{' '}
-                <span className="font-mono font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md border border-emerald-300">0 lần</span>{' '}
-                • Thí sinh tuân thủ tuyệt đối quy chế an ninh phòng thi (không vi phạm, không rời màn hình).
+              <span className="truncate">
+                <strong className="text-emerald-950 font-bold">An ninh:</strong> 0 vi phạm • Tuân thủ an toàn quy chế phòng thi.
               </span>
             </div>
-            <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300 shadow-xs">
+            <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-300 shadow-2xs">
               ✓ Phòng thi an toàn
             </span>
           </div>
         )}
+
+        {/* ================= THANH ĐIỀU HƯỚNG CÂU HỎI TRÊN ĐIỆN THOẠI DỌC (PINNED CỐ ĐỊNH, DỄ BẤM VỚI NGÓN TAY) ================= */}
+        <div className="sm:hidden bg-slate-100 border-b border-slate-200 px-3 py-2 shrink-0 space-y-1.5 shadow-2xs">
+          {/* Hàng 1: Trạng thái câu hiện tại, Điểm số, Loại câu hỏi */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="px-2 py-0.5 rounded-lg bg-indigo-600 text-white font-mono font-black text-xs shadow-xs">
+                Câu {selectedQuestionIndex + 1}/{totalQuestions}
+              </span>
+              <span className="text-[11px] font-semibold text-slate-600 truncate max-w-[130px]">
+                {currentQ?.type === 'single_choice' && 'Trắc nghiệm 1'}
+                {currentQ?.type === 'multiple_choice' && 'Nhiều đáp án'}
+                {currentQ?.type === 'matching' && 'Ghép đôi'}
+                {currentQ?.type === 'ordering' && 'Sắp xếp'}
+                {currentQ?.type === 'true_false' && 'Đúng / Sai'}
+                {currentQ?.type === 'hotspot' && 'Hotspot'}
+                {currentQ?.type === 'fill_blank' && 'Điền khuyết'}
+              </span>
+            </div>
+
+            {/* Trạng thái làm đúng / sai của câu hiện tại */}
+            <div className="flex items-center gap-1 shrink-0">
+              {qResult ? (
+                qResult.isCorrect ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px] inline-flex items-center gap-1 border border-emerald-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>+{qResult.earnedScore}đ</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[11px] inline-flex items-center gap-1 border border-rose-300">
+                    <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                    <span>0/{qResult.maxScore}đ</span>
+                  </span>
+                )
+              ) : null}
+            </div>
+          </div>
+
+          {/* Hàng 2: Thanh cuộn ngang các nút số câu hỏi (Tự động cuộn theo câu đang chọn) */}
+          <div
+            ref={questionStripRef}
+            className="flex items-center gap-1.5 overflow-x-auto py-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {questions.map((q, idx) => {
+              const res = submission.questionResults[q.id];
+              const isSelected = selectedQuestionIndex === idx;
+              const isCorrect = res?.isCorrect;
+              return (
+                <button
+                  key={q.id}
+                  type="button"
+                  onClick={() => setSelectedQuestionIndex(idx)}
+                  className={`min-w-8 h-8 px-2 rounded-lg font-mono text-xs font-bold shrink-0 flex items-center justify-center gap-0.5 border transition-all cursor-pointer active:scale-90 ${
+                    isSelected
+                      ? 'ring-2 ring-indigo-500 scale-105 font-black bg-white shadow-md z-10'
+                      : 'opacity-90'
+                  } ${
+                    isCorrect
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100'
+                      : 'bg-rose-50 text-rose-800 border-rose-300 hover:bg-rose-100'
+                  }`}
+                >
+                  <span>{idx + 1}</span>
+                  <span className="text-[10px] font-black">{isCorrect ? '✓' : '✕'}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* ================= 4. GIỮ NGUYÊN BỐ CỤC DANH SÁCH CÂU HỎI VÀ CHI TIẾT CÂU HỎI ================= */}
         <div className="flex-1 flex overflow-hidden">
@@ -512,66 +592,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
           </aside>
 
           {/* CỘT PHẢI: CHI TIẾT CÂU HỎI VÀ ĐÁP ÁN (Card sáng sang trọng, viền nét, gradient đẹp) */}
-          <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 bg-slate-50/40">
-            {/* Mobile Question Navigator Strip (sm:hidden) */}
-            <div className="sm:hidden bg-slate-100 p-2.5 rounded-2xl border border-slate-200 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedQuestionIndex((prev) => Math.max(0, prev - 1))}
-                  disabled={selectedQuestionIndex === 0}
-                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1 shadow-2xs"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                  <span>Trước</span>
-                </button>
-
-                <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
-                  <span className="text-slate-700">Câu {selectedQuestionIndex + 1}/{questions.length}</span>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${submission.questionResults[currentQ?.id || '']?.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
-                    {submission.questionResults[currentQ?.id || '']?.isCorrect ? '✓ Đúng' : '✕ Sai'}
-                  </span>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedQuestionIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
-                  disabled={selectedQuestionIndex === totalQuestions - 1}
-                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 disabled:opacity-30 text-indigo-700 border border-indigo-200 font-bold text-xs flex items-center gap-1 shadow-2xs"
-                >
-                  <span>Sau</span>
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Horizontal Scroll of all question numbers */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-                {questions.map((q, idx) => {
-                  const res = submission.questionResults[q.id];
-                  const isSelected = selectedQuestionIndex === idx;
-                  const isCorrect = res?.isCorrect;
-                  return (
-                    <button
-                      key={q.id}
-                      type="button"
-                      onClick={() => setSelectedQuestionIndex(idx)}
-                      className={`w-8 h-8 rounded-lg font-mono text-xs font-bold shrink-0 flex items-center justify-center border transition-all ${
-                        isSelected
-                          ? 'ring-2 ring-indigo-500 scale-105 font-black bg-white shadow-xs'
-                          : ''
-                      } ${
-                        isCorrect
-                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                          : 'bg-rose-50 text-rose-800 border-rose-300'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
+          <main ref={mainContentRef} className="flex-1 overflow-y-auto p-2.5 sm:p-6 lg:p-8 space-y-3.5 sm:space-y-6 bg-slate-50/40">
             {currentQ ? (
               <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5 bg-white p-4 sm:p-7 rounded-3xl border border-slate-200 shadow-sm shadow-slate-200/50">
                 {/* Header câu hỏi */}
@@ -1157,43 +1178,93 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
 
                 {/* 5. TRUE / FALSE */}
                 {currentQ.type === 'true_false' && currentQ.tfStatements && (
-                  <div className="overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
-                    <table className="w-full text-left text-xs">
-                      <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
-                        <tr>
-                          <th className="p-3">Mệnh đề / Nội dung</th>
-                          <th className="p-3 text-center w-32">Bạn chọn</th>
-                          <th className="p-3 text-center w-32">Đáp án đúng</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {currentQ.tfStatements.map((st) => {
-                          const studentVal = (submission.studentAnswers[currentQ.id] || {})[st.id];
-                          const isCorrect = studentVal === st.isTrue;
-                          return (
-                            <tr key={st.id} className={isCorrect ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-rose-50/40 hover:bg-rose-50/70'}>
-                              <td className="p-3 font-semibold text-slate-800">{st.statement}</td>
-                              <td className="p-3 text-center font-bold">
-                                <span className={`px-2.5 py-1 rounded-lg inline-block text-xs ${
+                  <div>
+                    {/* Bố cục dạng thẻ dễ nhìn trên điện thoại dọc (sm:hidden) */}
+                    <div className="sm:hidden space-y-2.5">
+                      {currentQ.tfStatements.map((st, sIdx) => {
+                        const studentVal = (submission.studentAnswers[currentQ.id] || {})[st.id];
+                        const isCorrect = studentVal === st.isTrue;
+                        return (
+                          <div
+                            key={st.id}
+                            className={`p-3 rounded-xl border-2 space-y-2 shadow-2xs ${
+                              isCorrect ? 'bg-emerald-50/60 border-emerald-300' : 'bg-rose-50/60 border-rose-300'
+                            }`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <span className="w-5 h-5 rounded-md bg-slate-200 text-slate-700 font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                                {sIdx + 1}
+                              </span>
+                              <p className="text-xs font-semibold text-slate-800 leading-snug">
+                                {st.statement}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-200/60 text-xs">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[11px] text-slate-500">Bạn chọn:</span>
+                                <span className={`px-2 py-0.5 rounded-md font-bold text-[11px] ${
                                   isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                                 }`}>
                                   {studentVal === true
                                     ? currentQ.trueLabel || 'Đúng'
                                     : studentVal === false
                                     ? currentQ.falseLabel || 'Sai'
-                                    : 'Chưa chọn'}
+                                    : 'Chưa chọn'} {isCorrect ? '✓' : '✕'}
                                 </span>
-                              </td>
-                              <td className="p-3 text-center font-black text-emerald-700">
-                                <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 inline-block text-xs border border-emerald-300">
-                                  {st.isTrue ? currentQ.trueLabel || 'Đúng' : currentQ.falseLabel || 'Sai'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                              </div>
+                              {!isCorrect && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[11px] text-slate-500">Đáp án:</span>
+                                  <span className="px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800 font-bold text-[11px] border border-emerald-300">
+                                    {st.isTrue ? currentQ.trueLabel || 'Đúng' : currentQ.falseLabel || 'Sai'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Bảng trên màn hình máy tính (hidden sm:block) */}
+                    <div className="hidden sm:block overflow-x-auto rounded-2xl border border-slate-200 shadow-xs">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-slate-100/80 text-slate-700 font-bold border-b border-slate-200">
+                          <tr>
+                            <th className="p-3">Mệnh đề / Nội dung</th>
+                            <th className="p-3 text-center w-32">Bạn chọn</th>
+                            <th className="p-3 text-center w-32">Đáp án đúng</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {currentQ.tfStatements.map((st) => {
+                            const studentVal = (submission.studentAnswers[currentQ.id] || {})[st.id];
+                            const isCorrect = studentVal === st.isTrue;
+                            return (
+                              <tr key={st.id} className={isCorrect ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-rose-50/40 hover:bg-rose-50/70'}>
+                                <td className="p-3 font-semibold text-slate-800">{st.statement}</td>
+                                <td className="p-3 text-center font-bold">
+                                  <span className={`px-2.5 py-1 rounded-lg inline-block text-xs ${
+                                    isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
+                                  }`}>
+                                    {studentVal === true
+                                      ? currentQ.trueLabel || 'Đúng'
+                                      : studentVal === false
+                                      ? currentQ.falseLabel || 'Sai'
+                                      : 'Chưa chọn'}
+                                  </span>
+                                </td>
+                                <td className="p-3 text-center font-black text-emerald-700">
+                                  <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 inline-block text-xs border border-emerald-300">
+                                    {st.isTrue ? currentQ.trueLabel || 'Đúng' : currentQ.falseLabel || 'Sai'}
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
 
@@ -1273,33 +1344,87 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         </div>
 
         {/* ================= FOOTER CỐ ĐỊNH ================= */}
-        <footer className="px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-xs">
-          <div className="text-xs text-slate-500 font-mono flex items-center gap-2 flex-wrap text-center sm:text-left justify-center sm:justify-start">
-            <span>Xem lại kết quả</span>
-            <span>•</span>
-            <span className="font-bold text-slate-800">Điểm số: {submission.score}/1000đ</span>
-            <span>•</span>
-            <span className="font-semibold text-slate-700">Đúng: {correctCount}/{totalQuestions}.</span>
+        <footer className="px-3 sm:px-6 py-2.5 sm:py-3.5 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-t border-slate-200 shrink-0 shadow-xs">
+          {/* Dành cho Điện thoại dọc (sm:hidden): Thanh điều hướng chuyển câu ngón tay cái cực kỳ tiện lợi */}
+          <div className="sm:hidden flex items-center justify-between gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setSelectedQuestionIndex((prev) => Math.max(0, prev - 1))}
+              disabled={selectedQuestionIndex === 0}
+              className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 disabled:opacity-30 disabled:pointer-events-none text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1 shadow-2xs transition-all active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Câu trước</span>
+            </button>
+
+            <div className="text-center font-mono">
+              <div className="text-xs font-black text-slate-900">
+                Câu {selectedQuestionIndex + 1}/{totalQuestions}
+              </div>
+              <div className="text-[10px] text-slate-500 font-medium">
+                {correctCount}/{totalQuestions} đúng
+              </div>
+            </div>
+
+            {selectedQuestionIndex < totalQuestions - 1 ? (
+              <button
+                type="button"
+                onClick={() => setSelectedQuestionIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
+                className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 shadow-md shadow-indigo-600/25 transition-all active:scale-95"
+              >
+                <span>Câu sau</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            ) : isRequiredPassEnforced && onRetakeExam ? (
+              <button
+                type="button"
+                onClick={onRetakeExam}
+                className="px-3 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold text-xs flex items-center gap-1 shadow-md shadow-indigo-600/25 transition-all active:scale-95 animate-pulse"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Làm lại</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3.5 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center gap-1 shadow-md shadow-slate-900/20 transition-all active:scale-95"
+              >
+                <span>Đóng lại</span>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+              </button>
+            )}
           </div>
-          {/* Nếu đang áp dụng yêu cầu làm đạt và có hàm làm lại đề: Ẩn nút Đóng Xem Lại, thay bằng nút Làm Lại Đề Thi */}
-          {isRequiredPassEnforced && onRetakeExam ? (
-            <button
-              type="button"
-              onClick={onRetakeExam}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition-all hover:scale-102 flex items-center justify-center gap-2 animate-pulse"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Làm Lại Đề Thi</span>
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center justify-center gap-1.5"
-            >
-              Đóng Xem Lại
-            </button>
-          )}
+
+          {/* Dành cho Desktop (hidden sm:flex) */}
+          <div className="hidden sm:flex items-center justify-between gap-3 w-full">
+            <div className="text-xs text-slate-500 font-mono flex items-center gap-2 flex-wrap">
+              <span>Xem lại kết quả</span>
+              <span>•</span>
+              <span className="font-bold text-slate-800">Điểm số: {submission.score}/1000đ</span>
+              <span>•</span>
+              <span className="font-semibold text-slate-700">Đúng: {correctCount}/{totalQuestions} câu</span>
+            </div>
+            {/* Nếu đang áp dụng yêu cầu làm đạt và có hàm làm lại đề: Ẩn nút Đóng Xem Lại, thay bằng nút Làm Lại Đề Thi */}
+            {isRequiredPassEnforced && onRetakeExam ? (
+              <button
+                type="button"
+                onClick={onRetakeExam}
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition-all hover:scale-102 flex items-center justify-center gap-2 animate-pulse"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>Làm Lại Đề Thi</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center justify-center gap-1.5"
+              >
+                Đóng Xem Lại
+              </button>
+            )}
+          </div>
         </footer>
       </div>
 
