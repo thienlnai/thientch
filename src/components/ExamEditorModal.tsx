@@ -658,38 +658,38 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-100 animate-in fade-in overflow-hidden">
       
       {/* ================= STICKY TOP APP BAR ================= */}
-      <header className="px-5 py-3.5 bg-slate-900 text-white flex items-center justify-between shadow-lg z-30 shrink-0 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md">
-            <FileText className="w-5 h-5 text-white" />
+      <header className="px-3 sm:px-5 py-2.5 sm:py-3.5 bg-slate-900 text-white flex items-center justify-between shadow-lg z-30 shrink-0 border-b border-slate-800 w-full max-w-full min-w-0 overflow-x-hidden">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-md shrink-0">
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-white tracking-tight">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <h1 className="text-sm sm:text-base font-bold text-white tracking-tight truncate max-w-[130px] xs:max-w-[200px] sm:max-w-none">
                 {initialExam ? 'Chỉnh Sửa Đề Thi Chuẩn Hóa' : 'Soạn Thảo Đề Thi Mới'}
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                Thang 1000đ • Đạt ≥ 950đ
+              <span className="hidden xs:inline-block px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+                1000đ • Đạt ≥ 950đ
               </span>
-              <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+              <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shrink-0">
                 {questions.length} câu hỏi
               </span>
               <span 
-                className="hidden xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                className="hidden xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0"
                 title="Lưu tách bạch các bảng CSDL Turso: exams, exam_questions, question_options..."
               >
                 <Database className="w-3 h-3 text-purple-400" />
                 <span>CSDL Đa Bảng</span>
               </span>
               <span 
-                className="hidden 2xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                className="hidden 2xl:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0"
                 title="Toàn bộ hình ảnh câu hỏi được lưu trữ dạng file trên GitHub Repository thay vì lưu Base64 vào CSDL"
               >
                 <ImageIcon className="w-3 h-3 text-emerald-400" />
                 <span>GitHub Storage</span>
               </span>
               <span 
-                className={`hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border transition-colors ${
+                className={`hidden lg:inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold border transition-colors shrink-0 ${
                   payloadStats.isHeavy 
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 animate-pulse' 
                     : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'
@@ -700,13 +700,13 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
                 <span>{payloadStats.formattedSize}</span>
               </span>
             </div>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 truncate max-w-[200px] sm:max-w-none">
               {title || 'Chưa đặt tên đề thi'} • {durationMinutes} phút • {subject}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {(isCompressingImage || isUploadingToStorage || storageStatusMsg) && (
             <span className={`hidden sm:inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold ${
               storageStatusMsg?.startsWith('✓')
@@ -722,7 +722,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
           <button
             type="button"
             onClick={() => setIsBankModalOpen(true)}
-            className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+            className="px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs shadow-md flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all active:scale-95"
             title="Mở Ngân hàng câu hỏi để chọn câu hỏi có sẵn"
           >
             <Database className="w-3.5 h-3.5" />
@@ -734,7 +734,7 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+            className={`px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer ${
               showSettings 
                 ? 'bg-indigo-600 text-white border-indigo-500 shadow-md' 
                 : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
@@ -750,14 +750,15 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting || isCompressingImage}
-            className="px-4 sm:px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg flex items-center gap-1.5 cursor-pointer transition-all disabled:opacity-50 active:scale-95"
+            className="px-3 sm:px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-lg flex items-center gap-1 sm:gap-1.5 cursor-pointer transition-all disabled:opacity-50 active:scale-95"
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
               <Check className="w-4 h-4" />
             )}
-            <span>{isSubmitting ? 'Đang lưu đa bảng...' : 'Lưu Đề Thi'}</span>
+            <span className="hidden sm:inline">{isSubmitting ? 'Đang lưu đa bảng...' : 'Lưu Đề Thi'}</span>
+            <span className="sm:hidden">{isSubmitting ? 'Lưu...' : 'Lưu'}</span>
           </button>
 
           {/* Close Modal Button */}

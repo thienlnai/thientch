@@ -153,22 +153,22 @@ export const ThientchLogo: React.FC<ThientchLogoProps> = ({
 
       {/* Brand Typography */}
       {showText && (
-        <div className="flex flex-col">
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <span
-              className={`${textSizes[size]} font-black tracking-tight font-sans select-none ${
+              className={`${textSizes[size]} font-black tracking-tight font-sans select-none whitespace-nowrap ${
                 variant === 'dark' ? 'text-white' : 'text-slate-950'
               }`}
             >
               THIEN<span className="text-[#EF4444] font-black">TECH</span>
             </span>
-            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-[#00FF88] border border-emerald-500/30">
+            <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-[#00FF88] border border-emerald-500/30 shrink-0">
               IT::EXAM
             </span>
           </div>
           {subtitle && (
             <p
-              className={`text-[11px] leading-tight select-none ${
+              className={`text-[11px] leading-tight select-none truncate max-w-[140px] xs:max-w-[200px] sm:max-w-none ${
                 variant === 'dark' ? 'text-slate-400' : 'text-slate-500'
               }`}
             >

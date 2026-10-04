@@ -849,7 +849,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
       
       {/* Toast Alert */}
       {toastMsg && (
@@ -887,7 +887,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
       />
 
       {/* CỘT 2 (BÊN PHẢI - WORKSPACE: 80% WIDTH, NỀN #F8FAFC SLATE-50) */}
-      <div className="w-full lg:w-[80%] flex-1 flex flex-col min-w-0 bg-[#F8FAFC] min-h-screen">
+      <div className="w-full lg:w-[80%] flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden bg-[#F8FAFC] min-h-screen">
         
         {/* Thanh điều hướng trên (Top Bar): Tìm kiếm thông minh Ctrl + K, LIVE SYNC Pulsing Dot, Thông báo ưu tiên, Đồng hồ thời gian thực */}
         <TopBar
@@ -904,7 +904,7 @@ export const AdminPortal: React.FC<AdminPortalProps> = ({
         />
 
         {/* Vùng làm việc chính (Workspace): Nền #F8FAFC dịu mắt */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 space-y-6">
+        <main className="flex-1 w-full max-w-full min-w-0 overflow-x-hidden p-3 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 pb-24 lg:pb-8">
         
         {/* ================= TAB 1: OVERVIEW ================= */}
         {activeTab === 'overview' && (

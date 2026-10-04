@@ -151,32 +151,32 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
   }, [isRequiredPassEnforced]);
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-5xl h-[92vh] bg-white rounded-3xl shadow-2xl shadow-indigo-950/15 flex flex-col overflow-hidden border border-slate-200/90">
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-2 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full max-w-5xl h-[96vh] sm:h-[92vh] bg-white rounded-2xl sm:rounded-3xl shadow-2xl shadow-indigo-950/15 flex flex-col overflow-hidden border border-slate-200/90">
         
         {/* ================= HEADER TÔNG SÁNG CAO CẤP ================= */}
-        <header className="px-6 py-4 bg-gradient-to-r from-white via-indigo-50/30 to-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0 gap-4 shadow-xs">
+        <header className="px-3 sm:px-6 py-2.5 sm:py-4 bg-gradient-to-r from-white via-indigo-50/30 to-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0 gap-2 sm:gap-4 shadow-xs">
           {/* Góc trái: Phân cấp thông tin rõ ràng */}
-          <div className="flex items-center gap-3.5 min-w-0 pr-2">
-            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-lg shadow-md shrink-0 transition-transform hover:scale-105 ${
+          <div className="flex items-center gap-2 sm:gap-3.5 min-w-0 pr-1 sm:pr-2">
+            <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl flex items-center justify-center font-bold text-base sm:text-lg shadow-md shrink-0 transition-transform hover:scale-105 ${
               submission.isPassed 
-                ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-emerald-500/25 ring-4 ring-emerald-50' 
-                : 'bg-gradient-to-tr from-rose-500 to-red-400 text-white shadow-rose-500/25 ring-4 ring-rose-50'
+                ? 'bg-gradient-to-tr from-emerald-500 to-teal-400 text-white shadow-emerald-500/25 ring-2 sm:ring-4 ring-emerald-50' 
+                : 'bg-gradient-to-tr from-rose-500 to-red-400 text-white shadow-rose-500/25 ring-2 sm:ring-4 ring-rose-50'
             }`}>
-              <Award className="w-6 h-6 text-white" />
+              <Award className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
             </div>
             <div className="min-w-0">
               {/* Tên bài thi làm nổi bật kèm Badge "✓ ĐẠT (≥950đ)" màu xanh ngọc */}
-              <div className="flex items-center gap-2.5">
-                <h2 className="text-base sm:text-lg font-black text-slate-900 truncate">
-                  Xem Lại Đáp Án: {submission.examTitle}
+              <div className="flex items-center gap-2 sm:gap-2.5">
+                <h2 className="text-sm sm:text-lg font-black text-slate-900 truncate">
+                  {submission.examTitle}
                 </h2>
-                <span className={`px-3 py-0.5 rounded-full text-xs font-bold shrink-0 shadow-xs inline-flex items-center gap-1 ${
+                <span className={`px-2 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-bold shrink-0 shadow-xs inline-flex items-center gap-1 ${
                   submission.isPassed 
                     ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' 
                     : 'bg-rose-100 text-rose-800 border border-rose-300'
                 }`}>
-                  {submission.isPassed ? '✓ ĐẠT (≥950đ)' : '✕ CHƯA ĐẠT'}
+                  {submission.isPassed ? '✓ ĐẠT' : '✕ CHƯA ĐẠT'}
                 </span>
               </div>
 
@@ -239,30 +239,30 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
           </div>
 
           {/* ================= GÓC PHẢI: KHỐI TỔNG KẾT ĐIỂM SỐ CARD MÀU XANH LÁ RỰC RỠ ================= */}
-          <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-            <div className={`px-5 py-2.5 rounded-2xl border flex flex-col items-end justify-center shadow-lg transition-all ${
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <div className={`px-2.5 sm:px-5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl border flex flex-col items-end justify-center shadow-lg transition-all ${
               submission.isPassed 
                 ? 'bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600 text-white border-emerald-400 shadow-emerald-500/25 ring-2 ring-emerald-300/40' 
                 : 'bg-gradient-to-br from-rose-500 via-rose-600 to-red-600 text-white border-rose-400 shadow-rose-500/25 ring-2 ring-rose-300/40'
             }`}>
               {/* 1. Điểm số nổi bật to rõ, thấy ngay kết quả xuất sắc trong 1 giây */}
-              <div className="flex items-baseline gap-1.5">
+              <div className="flex items-baseline gap-1">
                 <span className="text-[11px] font-black uppercase tracking-wider text-emerald-100 hidden sm:inline">
                   Điểm Đạt:
                 </span>
-                <span className="text-3xl sm:text-4xl font-black font-mono tracking-tight text-white drop-shadow-sm">
+                <span className="text-xl sm:text-4xl font-black font-mono tracking-tight text-white drop-shadow-sm">
                   {submission.score}
                 </span>
-                <span className="text-xs font-bold text-emerald-100 font-mono">
+                <span className="text-[10px] sm:text-xs font-bold text-emerald-100 font-mono">
                   / 1000đ
                 </span>
               </div>
 
               {/* 2. Số câu đúng 1 / 1 câu với pill tương phản bắt mắt */}
-              <div className="mt-1">
-                <span className="px-3 py-0.5 rounded-full text-xs font-bold font-mono inline-flex items-center gap-1.5 shadow-xs bg-white/20 backdrop-blur-xs text-white border border-white/30">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />
-                  <span>Số câu đúng: <strong className="font-black text-sm text-white">{correctCount}</strong> / {totalQuestions} câu</span>
+              <div className="mt-0.5 sm:mt-1">
+                <span className="px-2 sm:px-3 py-0.5 rounded-full text-[10px] sm:text-xs font-bold font-mono inline-flex items-center gap-1 shadow-xs bg-white/20 backdrop-blur-xs text-white border border-white/30">
+                  <CheckCircle2 className="w-3 h-3 text-white shrink-0" />
+                  <span><span className="hidden sm:inline">Số câu đúng: </span><strong className="font-black text-xs sm:text-sm text-white">{correctCount}</strong>/{totalQuestions}<span className="hidden sm:inline"> câu</span></span>
                 </span>
               </div>
             </div>
@@ -512,9 +512,68 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
           </aside>
 
           {/* CỘT PHẢI: CHI TIẾT CÂU HỎI VÀ ĐÁP ÁN (Card sáng sang trọng, viền nét, gradient đẹp) */}
-          <main className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-6 bg-slate-50/40">
+          <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 space-y-4 sm:space-y-6 bg-slate-50/40">
+            {/* Mobile Question Navigator Strip (sm:hidden) */}
+            <div className="sm:hidden bg-slate-100 p-2.5 rounded-2xl border border-slate-200 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedQuestionIndex((prev) => Math.max(0, prev - 1))}
+                  disabled={selectedQuestionIndex === 0}
+                  className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-30 text-slate-700 border border-slate-200 font-bold text-xs flex items-center gap-1 shadow-2xs"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span>Trước</span>
+                </button>
+
+                <div className="flex items-center gap-1.5 text-xs font-mono font-bold">
+                  <span className="text-slate-700">Câu {selectedQuestionIndex + 1}/{questions.length}</span>
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] ${submission.questionResults[currentQ?.id || '']?.isCorrect ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}`}>
+                    {submission.questionResults[currentQ?.id || '']?.isCorrect ? '✓ Đúng' : '✕ Sai'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedQuestionIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
+                  disabled={selectedQuestionIndex === totalQuestions - 1}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 disabled:opacity-30 text-indigo-700 border border-indigo-200 font-bold text-xs flex items-center gap-1 shadow-2xs"
+                >
+                  <span>Sau</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Horizontal Scroll of all question numbers */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+                {questions.map((q, idx) => {
+                  const res = submission.questionResults[q.id];
+                  const isSelected = selectedQuestionIndex === idx;
+                  const isCorrect = res?.isCorrect;
+                  return (
+                    <button
+                      key={q.id}
+                      type="button"
+                      onClick={() => setSelectedQuestionIndex(idx)}
+                      className={`w-8 h-8 rounded-lg font-mono text-xs font-bold shrink-0 flex items-center justify-center border transition-all ${
+                        isSelected
+                          ? 'ring-2 ring-indigo-500 scale-105 font-black bg-white shadow-xs'
+                          : ''
+                      } ${
+                        isCorrect
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : 'bg-rose-50 text-rose-800 border-rose-300'
+                      }`}
+                    >
+                      {idx + 1}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {currentQ ? (
-              <div className="max-w-3xl mx-auto space-y-5 bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-sm shadow-slate-200/50">
+              <div className="max-w-3xl mx-auto space-y-4 sm:space-y-5 bg-white p-4 sm:p-7 rounded-3xl border border-slate-200 shadow-sm shadow-slate-200/50">
                 {/* Header câu hỏi */}
                 <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
                   <div className="flex items-center gap-2">
@@ -1214,20 +1273,20 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         </div>
 
         {/* ================= FOOTER CỐ ĐỊNH ================= */}
-        <footer className="px-6 py-3.5 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-t border-slate-200 flex items-center justify-between shrink-0 shadow-xs">
-          <div className="text-xs text-slate-500 font-mono flex items-center gap-2">
-            <span>Xem lại kết quả thi</span>
+        <footer className="px-4 sm:px-6 py-3 sm:py-3.5 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 shadow-xs">
+          <div className="text-xs text-slate-500 font-mono flex items-center gap-2 flex-wrap text-center sm:text-left justify-center sm:justify-start">
+            <span>Xem lại kết quả</span>
             <span>•</span>
             <span className="font-bold text-slate-800">Điểm số: {submission.score}/1000đ</span>
             <span>•</span>
-            <span className="font-semibold text-slate-700">Số câu đúng: {correctCount}/{totalQuestions}.</span>
+            <span className="font-semibold text-slate-700">Đúng: {correctCount}/{totalQuestions}.</span>
           </div>
           {/* Nếu đang áp dụng yêu cầu làm đạt và có hàm làm lại đề: Ẩn nút Đóng Xem Lại, thay bằng nút Làm Lại Đề Thi */}
           {isRequiredPassEnforced && onRetakeExam ? (
             <button
               type="button"
               onClick={onRetakeExam}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition-all hover:scale-102 flex items-center gap-2 animate-pulse"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-bold text-xs cursor-pointer shadow-md shadow-indigo-600/25 transition-all hover:scale-102 flex items-center justify-center gap-2 animate-pulse"
             >
               <RotateCcw className="w-4 h-4" />
               <span>Làm Lại Đề Thi</span>
@@ -1236,7 +1295,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center gap-1.5"
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs cursor-pointer shadow-md shadow-slate-900/15 transition-all hover:scale-102 flex items-center justify-center gap-1.5"
             >
               Đóng Xem Lại
             </button>

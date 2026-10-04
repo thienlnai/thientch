@@ -186,26 +186,26 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       <div className="absolute top-1/3 -right-40 w-96 h-96 bg-[#00FF88]/15 rounded-full blur-[140px] pointer-events-none" />
 
       {/* Top Bar / Global Header */}
-      <header className="w-full max-w-7xl mx-auto px-4 sm:px-8 py-3.5 flex items-center justify-between z-20">
+      <header className="w-full max-w-7xl mx-auto px-3 sm:px-8 py-2.5 sm:py-3.5 flex items-center justify-between z-20">
         <ThientchLogo
           size="md"
           variant="dark"
           subtitle={lang === 'vi' ? 'Hệ thống Kiểm tra Trực tuyến Công nghệ Thông tin' : 'IT Online Examination System'}
         />
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
           <LanguageSelector currentLang={lang} onLanguageChange={onLanguageChange} />
         </div>
       </header>
 
       {/* Main Split-Screen Section */}
-      <main className="flex-1 flex items-center justify-center p-3 sm:p-6 lg:p-8 z-10">
-        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 bg-[#0C1628]/95 backdrop-blur-xl rounded-3xl shadow-2xl shadow-black/60 border border-slate-800/90 overflow-hidden min-h-[660px]">
+      <main className="flex-1 flex items-center justify-center p-2.5 sm:p-6 lg:p-8 z-10 w-full max-w-full min-w-0">
+        <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 bg-[#0C1628]/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/60 border border-slate-800/90 overflow-hidden min-h-0 lg:min-h-[660px]">
           
           {/* ========================================================
               PHẦN NHẬN DIỆN THƯƠNG HIỆU (BÊN TRÁI / LEFT BRANDING)
              ======================================================== */}
-          <div className="lg:col-span-6 bg-gradient-to-br from-[#060F1E] via-[#0A182E] to-[#0E2242] text-white p-7 sm:p-10 lg:p-12 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/80">
+          <div className="lg:col-span-6 bg-gradient-to-br from-[#060F1E] via-[#0A182E] to-[#0E2242] text-white p-4 sm:p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden border-b lg:border-b-0 lg:border-r border-slate-800/80">
             
             {/* Tech glows */}
             <div className="absolute -top-32 -left-32 w-80 h-80 bg-[#0066FF]/25 rounded-full blur-3xl pointer-events-none" />
@@ -215,11 +215,11 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div className="relative z-10 space-y-4">
 
               {/* System Title: 100% width, increased vertical height and impact */}
-              <div className="w-full select-none pt-1">
+              <div className="w-full select-none pt-1 overflow-hidden">
                 {lang === 'vi' ? (
                   <svg
                     viewBox="0 0 540 102"
-                    className="w-full h-auto overflow-visible"
+                    className="w-full h-auto overflow-hidden block"
                     aria-label={t.systemTitle}
                   >
                     <defs>
@@ -228,7 +228,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         <stop offset="60%" stopColor="#F0F6FF" />
                         <stop offset="100%" stopColor="#BBD7FF" />
                       </linearGradient>
-                      <filter id="shadowFilter" x="-10%" y="-10%" width="120%" height="130%">
+                      <filter id="shadowFilter" x="-5%" y="-5%" width="110%" height="115%">
                         <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#0066FF" floodOpacity="0.5" />
                       </filter>
                     </defs>
@@ -272,7 +272,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 ) : (
                   <svg
                     viewBox="0 0 540 102"
-                    className="w-full h-auto overflow-visible"
+                    className="w-full h-auto overflow-hidden block"
                     aria-label={t.systemTitle}
                   >
                     <defs>
@@ -281,7 +281,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         <stop offset="60%" stopColor="#F0F6FF" />
                         <stop offset="100%" stopColor="#BBD7FF" />
                       </linearGradient>
-                      <filter id="shadowFilterEn" x="-10%" y="-10%" width="120%" height="130%">
+                      <filter id="shadowFilterEn" x="-5%" y="-5%" width="110%" height="115%">
                         <feDropShadow dx="0" dy="3" stdDeviation="4" floodColor="#0066FF" floodOpacity="0.5" />
                       </filter>
                     </defs>
@@ -339,7 +339,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
 
             {/* IT Examination High-Tech Illustration Banner */}
-            <div className="relative z-10 my-6 sm:my-8 rounded-2xl overflow-hidden shadow-2xl border border-slate-700/80 group bg-slate-950/80">
+            <div className="hidden sm:block relative z-10 my-6 sm:my-8 rounded-2xl overflow-hidden shadow-2xl border border-slate-700/80 group bg-slate-950/80">
               <img
                 src={itIllustration}
                 alt="THIENTCH IT Exam Illustration"
@@ -361,7 +361,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
 
             {/* IT Examination Highlights */}
-            <div className="relative z-10 grid grid-cols-3 gap-2 sm:gap-3 pt-4 border-t border-slate-800 text-[11px] sm:text-xs text-slate-300">
+            <div className="hidden sm:grid relative z-10 grid-cols-3 gap-2 sm:gap-3 pt-4 border-t border-slate-800 text-[11px] sm:text-xs text-slate-300">
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-lg bg-[#0066FF]/20 flex items-center justify-center shrink-0 border border-[#0066FF]/30">
                   <Cpu className="w-3.5 h-3.5 text-[#00D2FF]" />
@@ -387,7 +387,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           {/* ========================================================
               KHUNG FORM ĐĂNG NHẬP (BÊN PHẢI / RIGHT LOGIN FORM)
              ======================================================== */}
-          <div className="lg:col-span-6 p-6 sm:p-10 lg:p-12 flex flex-col justify-center bg-[#0B1526]/80 relative">
+          <div className="lg:col-span-6 p-4 sm:p-8 lg:p-12 flex flex-col justify-center bg-[#0B1526]/80 relative">
             <div className="max-w-md w-full mx-auto space-y-6">
               
               {/* Form Title & Subtitle */}
@@ -462,7 +462,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         if (errorMsg) setErrorMsg(null);
                       }}
                       placeholder={t.studentIdPlaceholder}
-                      className={`w-full pl-11 pr-4 py-3 bg-[#08101E] hover:bg-[#0A1424] focus:bg-[#070D18] text-white placeholder-slate-500 text-sm font-medium rounded-xl border transition-all duration-200 outline-none ${
+                      className={`w-full pl-11 pr-4 py-3 bg-[#08101E] hover:bg-[#0A1424] focus:bg-[#070D18] text-white placeholder-slate-500 text-base sm:text-sm font-medium rounded-xl border transition-all duration-200 outline-none ${
                         errorMsg
                           ? 'border-red-500/60 ring-2 ring-red-500/20'
                           : 'border-slate-700/80 focus:border-[#00FF88] focus:ring-4 focus:ring-[#00FF88]/15'
@@ -519,7 +519,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                         if (errorMsg) setErrorMsg(null);
                       }}
                       placeholder={t.passwordPlaceholder}
-                      className={`w-full pl-11 pr-11 py-3 bg-[#08101E] hover:bg-[#0A1424] focus:bg-[#070D18] text-white placeholder-slate-500 text-sm font-medium rounded-xl border transition-all duration-200 outline-none ${
+                      className={`w-full pl-11 pr-11 py-3 bg-[#08101E] hover:bg-[#0A1424] focus:bg-[#070D18] text-white placeholder-slate-500 text-base sm:text-sm font-medium rounded-xl border transition-all duration-200 outline-none ${
                         errorMsg
                           ? 'border-red-500/60 ring-2 ring-red-500/20'
                           : 'border-slate-700/80 focus:border-[#00FF88] focus:ring-4 focus:ring-[#00FF88]/15'

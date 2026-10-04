@@ -277,7 +277,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
       
       {/* Toast */}
       {toastMsg && (
@@ -303,7 +303,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
       />
 
       {/* CỘT 2 (BÊN PHẢI - NỘI DUNG CHÍNH) */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 min-h-screen">
+      <div className="w-full lg:flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden bg-slate-50 min-h-screen">
         <TopBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -313,65 +313,65 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
           lang={lang}
         />
 
-        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="p-3 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full max-w-full min-w-0 overflow-x-hidden mx-auto pb-24 lg:pb-8">
           
           {/* BANNER THÔNG TIN VÀ THỐNG KÊ TỔNG QUAN (Requirement B.4: SỐ BÀI ĐÃ LÀM, CHƯA LÀM) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
-                <BookOpen className="w-6 h-6" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
+            <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs flex items-center gap-2.5 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold shrink-0">
+                <BookOpen className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
                   Tổng Đề Thi
                 </div>
-                <div className="text-2xl font-black text-slate-900 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono">
                   {availableExams.length}
                 </div>
               </div>
             </div>
 
             {/* SỐ BÀI ĐÃ LÀM */}
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
-                <FileCheck2 className="w-6 h-6" />
+            <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs flex items-center gap-2.5 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold shrink-0">
+                <FileCheck2 className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
                   Số Bài Đã Làm
                 </div>
-                <div className="text-2xl font-black text-emerald-600 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-emerald-600 font-mono">
                   {completedExamsCount}
                 </div>
               </div>
             </div>
 
             {/* SỐ BÀI CHƯA LÀM */}
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
-                <FileQuestion className="w-6 h-6" />
+            <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs flex items-center gap-2.5 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold shrink-0">
+                <FileQuestion className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
                   Số Bài Chưa Làm
                 </div>
-                <div className="text-2xl font-black text-amber-600 font-mono">
+                <div className="text-xl sm:text-2xl font-black text-amber-600 font-mono">
                   {pendingExamsCount}
                 </div>
               </div>
             </div>
 
             {/* ĐIỂM CHUẨN ĐẠT */}
-            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
-                <Award className="w-6 h-6" />
+            <div className="bg-white p-3 sm:p-4 rounded-2xl sm:rounded-3xl border border-slate-200 shadow-xs flex items-center gap-2.5 sm:gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold shrink-0">
+                <Award className="w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                  Chuẩn Đạt Chỉ Tiêu
+              <div className="min-w-0">
+                <div className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider truncate">
+                  Chuẩn Chỉ Tiêu
                 </div>
-                <div className="text-xl font-black text-purple-700 font-mono">
-                  ≥ 950 / 1000đ
+                <div className="text-base sm:text-xl font-black text-purple-700 font-mono truncate">
+                  ≥ 950đ
                 </div>
               </div>
             </div>
@@ -656,22 +656,22 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-4 sm:border-l sm:border-indigo-200 sm:pl-5 shrink-0">
-                    <div className="text-center px-2">
+                  <div className="grid grid-cols-3 gap-2 w-full sm:w-auto sm:flex sm:items-center sm:gap-4 sm:border-l sm:border-indigo-200 sm:pl-5 shrink-0">
+                    <div className="text-center px-1 sm:px-2">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Tổng Số Lần</div>
-                      <div className="text-xl font-black font-mono text-indigo-600">
+                      <div className="text-lg sm:text-xl font-black font-mono text-indigo-600">
                         {selectedFilteredExamInfo.count} lần
                       </div>
                     </div>
-                    <div className="text-center px-2">
+                    <div className="text-center px-1 sm:px-2">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Điểm Cao Nhất</div>
-                      <div className="text-xl font-black font-mono text-emerald-600">
+                      <div className="text-lg sm:text-xl font-black font-mono text-emerald-600">
                         {selectedFilteredExamInfo.bestScore} / 1000
                       </div>
                     </div>
-                    <div className="text-center px-2">
+                    <div className="text-center px-1 sm:px-2">
                       <div className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Lần Gần Nhất</div>
-                      <div className="text-xl font-black font-mono text-slate-800">
+                      <div className="text-lg sm:text-xl font-black font-mono text-slate-800">
                         {selectedFilteredExamInfo.latestScore} / 1000
                       </div>
                     </div>
@@ -681,7 +681,64 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
 
               {/* Bảng kết quả bài làm */}
               <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
+                {/* 1. Giao diện Di động (Card list trực quan, không cần cuộn ngang) */}
+                <div className="sm:hidden divide-y divide-slate-100">
+                  {paginatedSubmissions.map((sub) => (
+                    <div key={sub.id} className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-slate-900 text-sm leading-snug">{sub.examTitle}</h4>
+                          <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                            {new Date(sub.submittedAt).toLocaleTimeString('vi-VN')} {new Date(sub.submittedAt).toLocaleDateString('vi-VN')}
+                          </div>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-100 text-slate-700 shrink-0">
+                          Lần #{sub.attemptNumber}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs pt-1">
+                        <div>
+                          <span className="text-slate-400">Thời gian:</span>{' '}
+                          <strong className="text-slate-700 font-mono">
+                            {Math.floor(sub.timeSpentSeconds / 60)}p {sub.timeSpentSeconds % 60}s
+                          </strong>
+                        </div>
+                        <div>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            sub.isPassed ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {sub.score}/1000đ • {sub.isPassed ? '✓ ĐẠT' : '✕ Chưa Đạt'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {sub.violationCount > 0 && (
+                        <div className="px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-red-700 text-[11px] font-bold flex items-center gap-1">
+                          ⚠️ Vi phạm quy chế: {sub.violationCount} lần
+                        </div>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => setReviewingSubmission(sub)}
+                        className="w-full py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-2xs"
+                      >
+                        <Eye className="w-4 h-4" />
+                        <span>Xem Lại Đáp Án Chi Tiết</span>
+                      </button>
+                    </div>
+                  ))}
+
+                  {filteredSubmissions.length === 0 && (
+                    <div className="py-12 text-center text-slate-400 p-4">
+                      Bạn chưa nộp bài thi nào. Hãy bắt đầu làm bài tại tab Danh Sách Bài Thi!
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Giao diện Máy tính (Bảng đầy đủ - GIỮ NGUYÊN 100%) */}
+                <div className="hidden sm:block overflow-x-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 uppercase text-[11px]">
                       <tr>

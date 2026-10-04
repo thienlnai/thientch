@@ -46,7 +46,8 @@ import {
   ZoomIn,
   Flag,
   Target,
-  Trophy
+  Trophy,
+  LayoutGrid
 } from 'lucide-react';
 
 interface ExamTakingModalProps {
@@ -240,6 +241,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmSubmit, setShowConfirmSubmit] = useState(false);
   const [showIncompleteModal, setShowIncompleteModal] = useState(false);
+  const [showMobilePalette, setShowMobilePalette] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [submissionResult, setSubmissionResult] = useState<ExamSubmission | null>(null);
 
@@ -1374,8 +1376,8 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       )}
 
       {/* ================= THANH TIÊU ĐỀ PHÒNG THI (HỌC THUẬT, CỐ ĐỊNH, KHÔNG CUỘN) ================= */}
-      <header className="h-16 px-5 sm:px-6 bg-white border-b border-slate-200/90 shadow-2xs flex items-center justify-between shrink-0 z-20">
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+      <header className="h-14 sm:h-16 px-3 sm:px-6 bg-white border-b border-slate-200/90 shadow-2xs flex items-center justify-between shrink-0 z-20 w-full max-w-full min-w-0 overflow-x-hidden">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <ThientchLogo
             size="sm"
             variant="light"
@@ -1412,7 +1414,30 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         </div>
 
         {/* Thanh trạng thái góc phải: Đồng bộ ngầm, Cảnh báo vi phạm, Toàn màn hình */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* Mobile Live Countdown Timer (lg:hidden) */}
+          {!isTeacherTesting && (
+            <div className={`lg:hidden flex items-center gap-1 px-2 py-1 rounded-lg font-mono text-xs font-bold border ${
+              timeRemaining < 300 
+                ? 'bg-rose-50 text-rose-700 border-rose-300 animate-pulse' 
+                : 'bg-slate-50 text-slate-800 border-slate-200'
+            }`}>
+              <Clock className={`w-3.5 h-3.5 ${timeRemaining < 300 ? 'text-rose-600' : 'text-slate-600'}`} />
+              <span>{formatTimer(timeRemaining)}</span>
+            </div>
+          )}
+
+          {/* Mobile Question Palette Trigger (lg:hidden) */}
+          <button
+            type="button"
+            onClick={() => setShowMobilePalette(true)}
+            className="lg:hidden px-2 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors"
+            title="Mở bảng danh sách câu hỏi"
+          >
+            <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="font-mono text-[11px]">{answeredCount}/{totalQuestions}</span>
+          </button>
+
           {/* Trạng thái Offline-First */}
           <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
             {isOnline ? (
@@ -1433,19 +1458,19 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
             <button
               type="button"
               onClick={() => setShowViolationWarning(true)}
-              className="px-3 py-1.5 rounded-lg bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer animate-pulse"
+              className="px-2.5 sm:px-3 py-1.5 rounded-lg bg-red-50 border border-red-300 text-red-700 hover:bg-red-100 text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-colors cursor-pointer animate-pulse"
               title="Nhấn để xem chi tiết vi phạm quy chế"
             >
               <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
               <span className="hidden xs:inline">Vi phạm:</span>
-              <span>{violationCount} lần</span>
+              <span>{violationCount}</span>
             </button>
           )}
 
           <button
             type="button"
             onClick={enterFullscreen}
-            className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 border border-slate-200 transition-colors cursor-pointer"
             title="Chế độ toàn màn hình"
           >
             <Maximize className="w-4 h-4" />
@@ -1492,13 +1517,13 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       )}
 
       {/* ================= NỘI DUNG CHÍNH (BỐ CỤC 100VH VỪA VẶN 1 MÀN HÌNH - 2 CỘT 70/30) ================= */}
-      <div className="flex-1 min-h-0 overflow-hidden flex gap-5 p-4 lg:p-5 bg-[#F8FAFC]">
+      <div className="flex-1 min-h-0 overflow-hidden flex flex-col lg:flex-row gap-2 sm:gap-4 lg:gap-5 p-2 sm:p-4 lg:p-5 bg-[#F8FAFC] w-full max-w-full">
         {/* ================= CỘT TRÁI: NỘI DUNG CÂU HỎI & ĐÁP ÁN (~70%) ================= */}
-        <main className="flex-[7] min-w-0 h-full flex flex-col relative">
+        <main className="flex-1 lg:flex-[7] min-w-0 h-full flex flex-col relative">
           {currentQ ? (
             <div className="bg-white rounded-lg border border-slate-200/90 shadow-xs flex-1 min-h-0 flex flex-col overflow-hidden">
               {/* 1. Header Card câu hỏi */}
-              <div className="px-6 py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+              <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
                 <div className="flex items-center gap-2.5 flex-wrap">
                   <span className="px-3 py-1 rounded-md bg-[#1E3A8A] text-white font-bold text-xs tracking-wider shadow-2xs">
                     CÂU HỎI {currentIndex + 1} / {totalQuestions}
@@ -2260,21 +2285,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
               </div>
 
               {/* 4. Thanh điều hướng câu hỏi ở đáy Card Cột Trái (Bottom Bar cố định) */}
-              <div className="px-6 py-3.5 bg-slate-50/90 border-t border-slate-200/90 shrink-0 flex items-center justify-between">
+              <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 bg-slate-50/90 border-t border-slate-200/90 shrink-0 flex items-center justify-between gap-2">
                 <button
                   type="button"
                   disabled={currentIndex === 0}
                   onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-                  className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95"
+                  className="px-3 sm:px-4 py-2 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-95 min-h-[40px]"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Câu Trước</span>
+                  <span className="hidden xs:inline">Câu Trước</span>
+                  <span className="xs:hidden">Trước</span>
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold font-mono text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200">
-                    Câu {currentIndex + 1} / {totalQuestions}
-                  </span>
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowMobilePalette(true)}
+                    className="text-xs font-bold font-mono text-slate-700 bg-white hover:bg-slate-100 px-2.5 sm:px-3 py-1.5 rounded-lg border border-slate-200 flex items-center gap-1.5 cursor-pointer transition-colors"
+                    title="Bấm để mở bảng chọn câu hỏi"
+                  >
+                    <LayoutGrid className="w-3.5 h-3.5 text-indigo-600 lg:hidden" />
+                    <span>Câu {currentIndex + 1} / {totalQuestions}</span>
+                  </button>
                   {(() => {
                     const ans = answers[currentQ.id];
                     const isAns =
@@ -2286,11 +2318,11 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                         ? Object.keys(ans).length > 0
                         : true);
                     return isAns ? (
-                      <span className="text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-semibold flex items-center gap-1">
+                      <span className="hidden sm:inline-flex text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 font-semibold items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Đã trả lời
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 font-medium">
+                      <span className="hidden sm:inline-flex text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 font-medium">
                         Chưa trả lời
                       </span>
                     );
@@ -2301,9 +2333,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                   type="button"
                   disabled={currentIndex === totalQuestions - 1}
                   onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
-                  className="px-5 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                  className="px-3 sm:px-5 py-2 rounded-lg bg-[#2563EB] hover:bg-blue-700 active:scale-95 text-white disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer shadow-xs min-h-[40px]"
                 >
-                  <span>Câu Kế Tiếp</span>
+                  <span className="hidden xs:inline">Câu Kế Tiếp</span>
+                  <span className="xs:hidden">Tiếp</span>
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
@@ -2315,8 +2348,8 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           )}
         </main>
 
-        {/* ================= CỘT PHẢI: BẢNG GIÁM SÁT, ĐỒNG HỒ & ĐIỀU HƯỚNG (~30%) ================= */}
-        <aside className="flex-[3] min-w-[280px] max-w-[360px] h-full flex flex-col">
+        {/* ================= CỘT PHẢI: BẢNG GIÁM SÁT, ĐỒNG HỒ & ĐIỀU HƯỚNG (~30%) (GIỮ NGUYÊN TRÊN DESKTOP) ================= */}
+        <aside className="hidden lg:flex lg:flex-[3] min-w-[280px] max-w-[360px] h-full flex-col">
           <div className="bg-white rounded-lg border border-slate-200/90 shadow-xs h-full flex flex-col overflow-hidden">
             {/* Khu vực 1: Đồng hồ đếm ngược & Thông tin tóm tắt */}
             <div className="p-4 sm:p-5 border-b border-slate-100 space-y-3 shrink-0 bg-white">
@@ -2475,6 +2508,152 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           </div>
         </aside>
       </div>
+
+      {/* ================= BẢNG CÂU HỎI & NỘP BÀI TRÊN DI ĐỘNG (MOBILE PALETTE BOTTOM SHEET) ================= */}
+      {showMobilePalette && (
+        <div className="lg:hidden fixed inset-0 z-60 flex flex-col justify-end animate-in fade-in duration-200">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+            onClick={() => setShowMobilePalette(false)}
+          />
+          <div className="relative w-full max-h-[85vh] bg-white rounded-t-3xl shadow-2xl flex flex-col z-10 animate-in slide-in-from-bottom duration-250 overflow-hidden border-t-2 border-indigo-500">
+            {/* Sheet Handle */}
+            <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto my-2.5" />
+
+            {/* Sheet Header */}
+            <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-sm text-slate-900 flex items-center gap-2">
+                  <LayoutGrid className="w-4 h-4 text-indigo-600" />
+                  <span>Bảng Điều Hướng Câu Hỏi</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 font-mono mt-0.5">
+                  Đã trả lời: <strong className="text-emerald-600 font-bold">{answeredCount}/{totalQuestions}</strong> câu
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {!isTeacherTesting && (
+                  <span className={`px-2.5 py-1 rounded-lg font-mono text-xs font-bold border flex items-center gap-1 ${
+                    timeRemaining < 300 
+                      ? 'bg-rose-50 text-rose-700 border-rose-300' 
+                      : 'bg-slate-50 text-slate-700 border-slate-200'
+                  }`}>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTimer(timeRemaining)}</span>
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowMobilePalette(false)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Progress bar */}
+            <div className="px-5 py-1.5 bg-slate-50">
+              <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                  style={{
+                    width: `${totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0}%`,
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Question matrix (Scrollable) */}
+            <div className="flex-1 overflow-y-auto p-4 grid grid-cols-5 gap-2 content-start max-h-[45vh]">
+              {shuffledQuestions.map((q, qIdx) => {
+                const ans = answers[q.id];
+                const isAnswered =
+                  ans !== undefined &&
+                  ans !== null &&
+                  (Array.isArray(ans)
+                    ? ans.length > 0
+                    : typeof ans === 'object'
+                    ? Object.keys(ans).length > 0
+                    : true);
+                const isCurrent = currentIndex === qIdx;
+                const isFlagged = flaggedQuestions.includes(q.id);
+
+                return (
+                  <button
+                    key={q.id}
+                    type="button"
+                    onClick={() => {
+                      setCurrentIndex(qIdx);
+                      setShowMobilePalette(false);
+                    }}
+                    className={`h-11 rounded-xl font-mono text-xs font-bold transition-all cursor-pointer flex items-center justify-center relative ${
+                      isCurrent
+                        ? 'bg-[#2563EB] text-white font-black ring-2 ring-blue-500 ring-offset-1 shadow-xs'
+                        : isAnswered
+                        ? 'bg-emerald-50 text-emerald-800 border-2 border-emerald-400 font-bold'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200'
+                    }`}
+                  >
+                    {qIdx + 1}
+                    {isFlagged && (
+                      <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 ring-1 ring-white" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100 text-[10px] text-slate-600 grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-emerald-50 border-2 border-emerald-400 shrink-0" />
+                <span>Đã làm ({answeredCount})</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-slate-50 border border-slate-200 shrink-0" />
+                <span>Chưa làm ({totalQuestions - answeredCount})</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-[#2563EB] shrink-0" />
+                <span>Đang xem</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded bg-amber-100 border border-amber-400 shrink-0" />
+                <span>Đánh dấu ({flaggedQuestions.length})</span>
+              </div>
+            </div>
+
+            {/* Submit Action */}
+            <div className="p-4 bg-white border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobilePalette(false);
+                  handleAttemptSubmit();
+                }}
+                className={`w-full py-3.5 rounded-xl font-bold text-sm text-white shadow-md flex items-center justify-center gap-2 cursor-pointer ${
+                  !isAllAnswered && !isTeacherTesting
+                    ? 'bg-[#1E3A8A] hover:bg-blue-900'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {!isAllAnswered && !isTeacherTesting ? (
+                  <Lock className="w-4 h-4" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                <span>
+                  {!isAllAnswered && !isTeacherTesting
+                    ? `Nộp Bài (${answeredCount}/${totalQuestions})`
+                    : 'Nộp Bài Thi Ngay'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL PHÓNG TO HÌNH ẢNH (LIGHTBOX) ================= */}
       <ImageLightboxModal

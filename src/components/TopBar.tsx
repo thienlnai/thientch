@@ -111,24 +111,24 @@ export const TopBar: React.FC<TopBarProps> = ({
   ];
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4 transition-all">
+    <header className="sticky top-0 z-30 h-14 sm:h-16 bg-white/95 backdrop-blur-md border-b border-[#E2E8F0] px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2.5 sm:gap-4 transition-all w-full max-w-full min-w-0">
       
       {/* Left: Intelligent Global Search (Supports Ctrl + K) */}
-      <div className="flex-1 max-w-lg">
+      <div className="flex-1 max-w-lg min-w-0">
         {onSearchChange ? (
           <div className="relative group">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-[#2563EB] transition-colors" />
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-[#2563EB] transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery || ''}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-20 py-2 text-xs sm:text-sm bg-slate-50 border border-[#E2E8F0] rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all placeholder:text-slate-400 text-[#0F172A]"
+              className="w-full pl-9 sm:pl-10 pr-7 sm:pr-20 py-1.5 sm:py-2 text-xs sm:text-sm bg-slate-50 border border-[#E2E8F0] rounded-xl focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#2563EB]/20 focus:border-[#2563EB] transition-all placeholder:text-slate-400 text-[#0F172A] truncate"
             />
             
             {/* Ctrl + K Shortcut Hint or Clear Button */}
-            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
               {searchQuery ? (
                 <button
                   type="button"
@@ -147,14 +147,14 @@ export const TopBar: React.FC<TopBarProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0 truncate">
             {roleBadgeText && (
-              <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg border ${badgeColorClasses} flex items-center gap-1.5`}>
+              <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg border ${badgeColorClasses} flex items-center gap-1.5 shrink-0`}>
                 <ShieldCheck className="w-3.5 h-3.5" />
-                {roleBadgeText}
+                <span className="truncate">{roleBadgeText}</span>
               </span>
             )}
-            <span className="text-xs text-slate-400 font-medium hidden md:inline">
+            <span className="text-xs text-slate-400 font-medium hidden md:inline truncate">
               THIEN<span className="text-[#EF4444] font-bold">TECH</span> IT Assessment Platform
             </span>
           </div>
@@ -162,7 +162,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       </div>
 
       {/* Right Controls: Role Badge, LIVE SYNC with Pulsing Dot, Real-time Clock, Notifications */}
-      <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
         
         {/* Role Badge */}
         {onSearchChange && roleBadgeText && (
@@ -180,11 +180,11 @@ export const TopBar: React.FC<TopBarProps> = ({
             type="button"
             onClick={onRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 select-none shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed"
+            className="flex items-center justify-center p-2 sm:px-3 sm:py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-[#E2E8F0] text-xs font-semibold text-slate-700 select-none shadow-2xs cursor-pointer transition-all active:scale-95 disabled:opacity-75 disabled:cursor-not-allowed"
             title="Làm mới và đồng bộ lại toàn bộ dữ liệu từ máy chủ Turso"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span className="hidden md:inline">
+            <span className="hidden md:inline ml-1.5">
               {isRefreshing ? (lang === 'vi' ? 'Đang đồng bộ...' : 'Syncing...') : (lang === 'vi' ? 'Làm Mới' : 'Refresh')}
             </span>
           </button>
@@ -195,7 +195,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           <button
             type="button"
             onClick={onOpenSupabaseConfig}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium select-none shadow-2xs cursor-pointer transition-all active:scale-95 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium select-none shadow-2xs cursor-pointer transition-all active:scale-95 ${
               isLiveSync
                 ? 'bg-emerald-50 hover:bg-emerald-100 border-emerald-200 text-emerald-800'
                 : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800'
@@ -208,22 +208,22 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             {isLiveSync ? (
               <>
-                <span className="relative flex h-2.5 w-2.5">
+                <span className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10B981] opacity-75 duration-1000" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#10B981]" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-[#10B981]" />
                 </span>
-                <span className="font-mono text-xs font-bold text-emerald-700 tracking-tight hidden sm:inline">
+                <span className="font-mono text-[11px] sm:text-xs font-bold text-emerald-700 tracking-tight hidden sm:inline">
                   TURSO ONLINE
                 </span>
                 <span className="text-[10px] font-semibold text-emerald-600 bg-emerald-100/80 px-1.5 py-0.5 rounded border border-emerald-200">
-                  {lang === 'vi' ? 'Tùy chỉnh' : 'Config'}
+                  {lang === 'vi' ? 'Cấu hình' : 'Config'}
                 </span>
               </>
             ) : (
               <>
                 <WifiOff className="w-3.5 h-3.5 text-amber-600" />
                 <span className="text-amber-700 text-xs font-mono font-bold hidden sm:inline">
-                  CHẾ ĐỘ CỤC BỘ
+                  CỤC BỘ
                 </span>
                 <span className="text-[10px] font-semibold text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded border border-amber-200">
                   {lang === 'vi' ? 'Kết nối' : 'Connect'}
@@ -233,7 +233,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
         ) : (
           <div
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-medium select-none shadow-2xs ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border text-xs font-medium select-none shadow-2xs ${
               isLiveSync
                 ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                 : 'bg-amber-50 border-amber-200 text-amber-800'
@@ -241,10 +241,10 @@ export const TopBar: React.FC<TopBarProps> = ({
           >
             {isLiveSync ? (
               <>
-                <span className="relative flex h-2.5 w-2.5">
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#10B981]" />
+                <span className="relative flex h-2 w-2 sm:h-2.5 sm:w-2.5">
+                  <span className="relative inline-flex rounded-full h-2 w-2 sm:h-2.5 sm:w-2.5 bg-[#10B981]" />
                 </span>
-                <span className="font-mono text-xs font-bold text-emerald-700">LIVE SYNC</span>
+                <span className="font-mono text-[11px] sm:text-xs font-bold text-emerald-700">ONLINE</span>
               </>
             ) : (
               <>
@@ -285,7 +285,7 @@ export const TopBar: React.FC<TopBarProps> = ({
           </button>
 
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-88 bg-white rounded-2xl shadow-xl border border-[#E2E8F0] p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
+            <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-88 max-w-sm bg-white rounded-2xl shadow-xl border border-[#E2E8F0] p-4 z-50 animate-in fade-in zoom-in-95 duration-150">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
                   <Bell className="w-4 h-4 text-[#2563EB]" />

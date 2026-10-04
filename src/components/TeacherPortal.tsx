@@ -1380,7 +1380,7 @@ NOTIFY pgrst, 'reload schema';`;
   ];
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
+    <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-100 flex flex-col lg:flex-row font-sans antialiased text-slate-800">
       
       {/* Toast Notification */}
       {toastMsg && (
@@ -1420,7 +1420,7 @@ NOTIFY pgrst, 'reload schema';`;
       />
 
       {/* CỘT 2 (BÊN PHẢI - NỘI DUNG CHÍNH) */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-50 min-h-screen">
+      <div className="w-full lg:flex-1 flex flex-col min-w-0 max-w-full overflow-x-hidden bg-slate-50 min-h-screen">
         <TopBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
@@ -1430,7 +1430,7 @@ NOTIFY pgrst, 'reload schema';`;
           lang={lang}
         />
 
-        <main className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
+        <main className="p-3 sm:p-6 lg:p-8 space-y-5 sm:space-y-6 max-w-7xl w-full max-w-full min-w-0 overflow-x-hidden mx-auto pb-24 lg:pb-8">
           
           {/* CẢNH BÁO NỔI BẬT: TURSO THIẾU CỘT QUESTIONS */}
           {isMissingQuestionsColumn && (
