@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { 
   Exam, 
   ExamQuestion, 
@@ -55,6 +55,7 @@ import {
   isGitHubConfigured 
 } from '../services/storageService.ts';
 import { isConfigured } from '../turso.ts';
+import { getExamWithQuestions } from '../services/dbService.ts';
 import { QuestionBankModal } from './QuestionBankModal.tsx';
 import { 
   extractGradeNumber, 
@@ -227,6 +228,38 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
           },
         ]
   );
+
+  // Tự động nạp câu hỏi từ CSDL Turso nếu mở đề thi ở máy khác mà chưa có câu hỏi
+  const [isLoadingQuestionsFromTurso, setIsLoadingQuestionsFromTurso] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (initialExam?.id) {
+      const hasQuestions = Array.isArray(initialExam.questions) && initialExam.questions.length > 0;
+      if (!hasQuestions) {
+        let isMounted = true;
+        setIsLoadingQuestionsFromTurso(true);
+        getExamWithQuestions(initialExam.id, true)
+          .then((fullExam) => {
+            if (isMounted && fullExam && Array.isArray(fullExam.questions) && fullExam.questions.length > 0) {
+              setQuestions(fullExam.questions);
+              if (fullExam.totalScore) setTotalScore(fullExam.totalScore);
+              if (fullExam.passingScore) setPassingScore(fullExam.passingScore);
+              if (fullExam.requiredPassCount) setRequiredPassCount(fullExam.requiredPassCount);
+            }
+          })
+          .catch((err) => {
+            console.warn('[ExamEditorModal] Lỗi nạp câu hỏi từ Turso:', err);
+          })
+          .finally(() => {
+            if (isMounted) setIsLoadingQuestionsFromTurso(false);
+          });
+
+        return () => {
+          isMounted = false;
+        };
+      }
+    }
+  }, [initialExam?.id]);
 
   // Tính toán chính xác số điểm của từng câu hỏi theo tổng điểm và số lượng câu hỏi thực tế
   const pointsPerQuestion = useMemo(() => {
@@ -1275,6 +1308,22 @@ export const ExamEditorModal: React.FC<ExamEditorModalProps> = ({
 
             {/* ================= QUESTIONS STREAM (TRẢI ĐỀU TỪ TRÊN XUỐNG DƯỚI) ================= */}
             <div className="space-y-6">
+              {isLoadingQuestionsFromTurso && (
+                <div className="p-5 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 rounded-3xl border border-indigo-200 shadow-sm flex items-center gap-3.5 text-indigo-900 animate-pulse">
+                  <div className="w-9 h-9 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-indigo-950 uppercase tracking-wider">
+                      Đang đồng bộ dữ liệu câu hỏi từ CSDL Turso...
+                    </h4>
+                    <p className="text-[11px] text-indigo-700 mt-0.5">
+                      Hệ thống đang tải toàn bộ câu hỏi và đáp án trực tiếp từ Turso Database để bạn chỉnh sửa.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {questions.map((question, qIdx) => {
                 const typeConfig = questionTypeLabels[question.type];
                 const TypeIcon = typeConfig.icon;

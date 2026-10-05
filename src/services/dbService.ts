@@ -1762,128 +1762,140 @@ export async function getExamWithQuestions(examId: string, forceRefresh = false)
 
   try {
     /**
-     * TẦNG 4: SINGLE QUERY LEFT JOIN DUY NHẤT (CHỐNG N+1 & FULL TABLE SCAN)
-     * - Chỉ 1 round-trip tới Turso Database.
-     * - Dùng Primary Key exams.id và B-Tree Index idx_exam_questions_exam_order.
-     * - Số Rows Read chính xác bằng số câu hỏi của đề thi, không đọc dư 1 hàng nào!
+     * TẦNG 4: TRUY VẤN DỮ LIỆU ĐỀ THI VÀ CÂU HỎI TỪ CSDL TURSO (ĐA NỀN TẢNG, AN TOÀN TUYỆT ĐỐI)
+     * - Sử dụng SELECT * để chống lỗi sập do lệch tên cột (no such column).
+     * - Tự động fallback giữa examId và exam_id.
+     * - Tự động đồng bộ các bảng con (question_options, question_matching_pairs, question_bank...).
      */
-    const joinSql = `
-      SELECT 
-        e.id AS e_id, e.title AS e_title, e.description AS e_description, 
-        e.subject AS e_subject, e.grade AS e_grade, e.targetGrades AS e_targetGrades, 
-        e.creatorId AS e_creatorId, e.creatorName AS e_creatorName, e.classIds AS e_classIds, 
-        e.durationMinutes AS e_durationMinutes, e.totalScore AS e_totalScore, 
-        e.passingScore AS e_passingScore, e.requiredPassCount AS e_requiredPassCount, e.status AS e_status, 
-        e.allowReviewAnswers AS e_allowReviewAnswers, e.isPracticeTest AS e_isPracticeTest, 
-        e.practiceRandomCount AS e_practiceRandomCount, e.totalQuestions AS e_totalQuestions,
-        e.questionIds AS e_questionIds,
-        e.createdAt AS e_createdAt, e.updatedAt AS e_updatedAt,
-        q.id AS q_id, q.examId AS q_examId, q.orderIndex AS q_orderIndex, q.type AS q_type, 
-        q.title AS q_title, q.mediaType AS q_mediaType, q.mediaUrl AS q_mediaUrl, 
-        q.explanation AS q_explanation, q.correctOptionId AS q_correctOptionId, 
-        q.correctOptionIds AS q_correctOptionIds, q.trueLabel AS q_trueLabel, 
-        q.falseLabel AS q_falseLabel, q.hotspotImageUrl AS q_hotspotImageUrl, 
-        q.fillBlankTemplate AS q_fillBlankTemplate, q.options AS q_options, 
-        q.matchingPairs AS q_matchingPairs, q.shuffledRightPairs AS q_shuffledRightPairs, 
-        q.orderingItems AS q_orderingItems, q.tfStatements AS q_tfStatements, 
-        q.shuffledTfColumns AS q_shuffledTfColumns, q.hotspotRegions AS q_hotspotRegions, 
-        q.fillBlankItems AS q_fillBlankItems, q.createdAt AS q_createdAt, q.updatedAt AS q_updatedAt
-      FROM ${EXAMS_TABLE} e
-      LEFT JOIN ${EXAM_QUESTIONS_TABLE} q ON e.id = q.examId
-      WHERE e.id = ?
-      ORDER BY q.orderIndex ASC
-    `;
-
-    const rows = await tursoQuery(joinSql, [cleanId]);
-
-    if (!Array.isArray(rows) || rows.length === 0) {
+    // 1. Tải bản ghi đề thi gốc
+    const examRows = await tursoQuery(`SELECT * FROM ${EXAMS_TABLE} WHERE id = ? LIMIT 1`, [cleanId]);
+    if (!Array.isArray(examRows) || examRows.length === 0) {
       return localMatch || null;
     }
 
-    const first = rows[0];
-    const parseJson = (val: any, fallback: any = []) => {
-      if (!val) return fallback;
-      if (typeof val === 'string') {
-        try { return JSON.parse(val); } catch { return fallback; }
+    const baseExam: Exam = normalizeExam(examRows[0]);
+    let questions: ExamQuestion[] = Array.isArray(baseExam.questions) && baseExam.questions.length > 0
+      ? [...baseExam.questions]
+      : [];
+
+    // 2. Nếu đề thi chưa có câu hỏi nhúng sẵn, tải từ bảng exam_questions
+    if (questions.length === 0) {
+      let qRows: any[] = [];
+      try {
+        qRows = await tursoQuery(
+          `SELECT * FROM ${EXAM_QUESTIONS_TABLE} WHERE examId = ? ORDER BY orderIndex ASC`,
+          [cleanId]
+        );
+      } catch {
+        try {
+          qRows = await tursoQuery(
+            `SELECT * FROM ${EXAM_QUESTIONS_TABLE} WHERE exam_id = ? ORDER BY orderIndex ASC`,
+            [cleanId]
+          );
+        } catch {}
       }
-      return val;
-    };
 
-    const baseExam: Exam = {
-      id: String(first.e_id || cleanId),
-      title: String(first.e_title || 'Đề thi trắc nghiệm'),
-      description: String(first.e_description || ''),
-      subject: String(first.e_subject || 'Công nghệ Thông tin'),
-      grade: String(first.e_grade || 'Khối 12'),
-      targetGrades: parseJson(first.e_targetGrades, []),
-      creatorId: String(first.e_creatorId || ''),
-      creatorName: String(first.e_creatorName || ''),
-      classIds: parseJson(first.e_classIds, []),
-      durationMinutes: Number(first.e_durationMinutes ?? 45),
-      totalScore: Number(first.e_totalScore ?? 1000),
-      passingScore: Number(first.e_passingScore ?? 950),
-      requiredPassCount: Math.max(1, Number(first.e_requiredPassCount ?? 1)),
-      status: first.e_status || 'published',
-      allowReviewAnswers: Boolean(first.e_allowReviewAnswers ?? 1),
-      isPracticeTest: Boolean(first.e_isPracticeTest ?? 0),
-      practiceRandomCount: Number(first.e_practiceRandomCount ?? 0),
-      totalQuestions: Number(first.e_totalQuestions ?? 0),
-      questionIds: [],
-      questions: [],
-      createdAt: first.e_createdAt || new Date().toISOString(),
-      updatedAt: first.e_updatedAt || new Date().toISOString(),
-    };
-
-    const questions: ExamQuestion[] = [];
-    const seenQIds = new Set<string>();
-
-    for (const r of rows) {
-      const qId = r.q_id;
-      if (qId && !seenQIds.has(qId)) {
-        seenQIds.add(qId);
-        questions.push({
-          id: String(qId),
-          type: r.q_type || 'single_choice',
-          title: String(r.q_title || ''),
-          mediaType: r.q_mediaType || 'none',
-          mediaUrl: r.q_mediaUrl || undefined,
-          explanation: r.q_explanation || undefined,
-          options: parseJson(r.q_options, []),
-          correctOptionId: r.q_correctOptionId || undefined,
-          correctOptionIds: parseJson(r.q_correctOptionIds, []),
-          matchingPairs: parseJson(r.q_matchingPairs, []),
-          shuffledRightPairs: parseJson(r.q_shuffledRightPairs, []),
-          orderingItems: parseJson(r.q_orderingItems, []),
-          trueLabel: r.q_trueLabel || 'Đúng',
-          falseLabel: r.q_falseLabel || 'Sai',
-          tfStatements: parseJson(r.q_tfStatements, []),
-          shuffledTfColumns: parseJson(r.q_shuffledTfColumns, []),
-          hotspotImageUrl: r.q_hotspotImageUrl || undefined,
-          hotspotRegions: parseJson(r.q_hotspotRegions, []),
-          fillBlankTemplate: r.q_fillBlankTemplate || undefined,
-          fillBlankItems: parseJson(r.q_fillBlankItems, []),
-          createdAt: r.q_createdAt || baseExam.createdAt,
-          updatedAt: r.q_updatedAt || baseExam.updatedAt,
-        });
+      if (Array.isArray(qRows) && qRows.length > 0) {
+        questions = qRows.map((r) => normalizeExamQuestion(r, cleanId));
       }
     }
 
+    // 3. Fallback: Nếu vẫn chưa có câu hỏi, kiểm tra bảng question_bank
     if (questions.length === 0) {
-      const qIds: string[] = parseJson(first.e_questionIds, []);
-      if (qIds.length > 0) {
-        for (const ex of localExams) {
-          if (ex.questions) {
-            for (const q of ex.questions) {
-              if (qIds.includes(q.id) && !seenQIds.has(q.id)) {
-                seenQIds.add(q.id);
-                questions.push(q);
-              }
+      let bankRows: any[] = [];
+      try {
+        bankRows = await tursoQuery(
+          `SELECT * FROM ${QUESTION_BANK_TABLE} WHERE sourceExamId = ? ORDER BY createdAt ASC`,
+          [cleanId]
+        );
+      } catch {
+        try {
+          bankRows = await tursoQuery(
+            `SELECT * FROM ${QUESTION_BANK_TABLE} WHERE source_exam_id = ? ORDER BY createdAt ASC`,
+            [cleanId]
+          );
+        } catch {}
+      }
+
+      if ((!bankRows || bankRows.length === 0) && baseExam.questionIds && baseExam.questionIds.length > 0) {
+        try {
+          const placeholders = baseExam.questionIds.map(() => '?').join(',');
+          bankRows = await tursoQuery(
+            `SELECT * FROM ${QUESTION_BANK_TABLE} WHERE id IN (${placeholders})`,
+            baseExam.questionIds
+          );
+        } catch {}
+      }
+
+      if (Array.isArray(bankRows) && bankRows.length > 0) {
+        questions = bankRows.map((b) => normalizeQuestionBankRow(b));
+      }
+    }
+
+    // 4. Fallback: Kiểm tra bộ nhớ localExams nếu có
+    if (questions.length === 0 && baseExam.questionIds && baseExam.questionIds.length > 0) {
+      const qIds = baseExam.questionIds;
+      for (const ex of localExams) {
+        if (ex.questions && ex.questions.length > 0) {
+          for (const q of ex.questions) {
+            if (qIds.includes(q.id) && !questions.some((item) => item.id === q.id)) {
+              questions.push(q);
             }
           }
         }
       }
     }
 
+    // 5. Đồng bộ các bảng con: Nạp options, matching pairs, ordering items nếu câu hỏi chưa có đầy đủ
+    const needsOptions = questions.some(
+      (q) => (q.type === 'single_choice' || q.type === 'multiple_choice') && (!q.options || q.options.length === 0)
+    );
+    if (needsOptions) {
+      try {
+        let optRows: any[] = [];
+        try {
+          optRows = await tursoQuery(
+            `SELECT * FROM ${QUESTION_OPTIONS_TABLE} WHERE examId = ? ORDER BY orderIndex ASC`,
+            [cleanId]
+          );
+        } catch {
+          optRows = await tursoQuery(
+            `SELECT * FROM ${QUESTION_OPTIONS_TABLE} WHERE exam_id = ? ORDER BY orderIndex ASC`,
+            [cleanId]
+          );
+        }
+
+        if (Array.isArray(optRows) && optRows.length > 0) {
+          const optionsByQ = new Map<string, any[]>();
+          for (const opt of optRows) {
+            const qId = String(opt.questionId || opt.question_id || '');
+            if (qId) {
+              const list = optionsByQ.get(qId) || [];
+              list.push(opt);
+              optionsByQ.set(qId, list);
+            }
+          }
+
+          questions = questions.map((q) => {
+            const opts = optionsByQ.get(q.id);
+            if (opts && opts.length > 0 && (!q.options || q.options.length === 0)) {
+              return {
+                ...q,
+                options: opts.map((o) => ({
+                  id: String(o.id),
+                  text: String(o.text || ''),
+                  imageUrl: o.imageUrl || o.image_url || undefined,
+                })),
+                correctOptionId: opts.find((o) => o.isCorrect || o.is_correct)?.id || q.correctOptionId,
+              };
+            }
+            return q;
+          });
+        }
+      } catch {}
+    }
+
+    // 6. Gán danh sách câu hỏi hoàn chỉnh vào đề thi
     baseExam.questions = questions;
     baseExam.totalQuestions = questions.length || baseExam.totalQuestions;
     baseExam.questionIds = questions.map((q) => q.id);

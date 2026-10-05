@@ -52,7 +52,8 @@ import {
   updateExam,
   deleteExam,
   deleteMultipleExams,
-  mergeExams
+  mergeExams,
+  getExamWithQuestions
 } from '../services/dbService.ts';
 import { ExamEditorModal } from './ExamEditorModal.tsx';
 import { ExamTakingModal } from './ExamTakingModal.tsx';
@@ -299,15 +300,54 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
     );
   };
 
+  // Loading states cho các tác vụ tải đề thi từ Turso
+  const [loadingEditExamId, setLoadingEditExamId] = useState<string | null>(null);
+  const [loadingActionExamId, setLoadingActionExamId] = useState<string | null>(null);
+
   // Actions
   const handleOpenCreateExam = () => {
     setEditingExam(null);
     setIsEditorOpen(true);
   };
 
-  const handleOpenEditExam = (exam: Exam) => {
-    setEditingExam(exam);
-    setIsEditorOpen(true);
+  const handleOpenEditExam = async (exam: Exam) => {
+    setLoadingEditExamId(exam.id);
+    try {
+      // Đọc đầy đủ đề thi và câu hỏi trực tiếp từ CSDL Turso để đồng bộ đa máy
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      setEditingExam(fullExam || exam);
+      setIsEditorOpen(true);
+    } catch (err) {
+      console.error('Lỗi nạp đề thi từ Turso:', err);
+      setEditingExam(exam);
+      setIsEditorOpen(true);
+    } finally {
+      setLoadingEditExamId(null);
+    }
+  };
+
+  const handleTestExam = async (exam: Exam) => {
+    setLoadingActionExamId(exam.id);
+    try {
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      setExamToTest(fullExam || exam);
+    } catch {
+      setExamToTest(exam);
+    } finally {
+      setLoadingActionExamId(null);
+    }
+  };
+
+  const handleOpenPrintExam = async (exam: Exam) => {
+    setLoadingActionExamId(exam.id);
+    try {
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      setExamToPrint(fullExam || exam);
+    } catch {
+      setExamToPrint(exam);
+    } finally {
+      setLoadingActionExamId(null);
+    }
   };
 
   const handleSaveExamFromModal = async (examData: Omit<Exam, 'id' | 'createdAt' | 'updatedAt'>) => {
@@ -359,29 +399,34 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
 
   // Clone / Duplicate Exam
   const handleCloneExam = async (exam: Exam) => {
+    setLoadingActionExamId(exam.id);
     try {
-      const clonedTitle = `[Bản sao] ${exam.title}`;
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      const targetExam = fullExam || exam;
+      const clonedTitle = `[Bản sao] ${targetExam.title}`;
       await addExam({
         title: clonedTitle,
-        description: exam.description ? `(Bản sao) ${exam.description}` : undefined,
-        subject: exam.subject,
-        grade: exam.grade || 'Khối 12',
-        targetGrades: exam.targetGrades ? [...exam.targetGrades] : (exam.grade ? [exam.grade] : []),
+        description: targetExam.description ? `(Bản sao) ${targetExam.description}` : undefined,
+        subject: targetExam.subject,
+        grade: targetExam.grade || 'Khối 12',
+        targetGrades: targetExam.targetGrades ? [...targetExam.targetGrades] : (targetExam.grade ? [targetExam.grade] : []),
         creatorId: currentUser.id,
         creatorName: currentUser.fullName || currentUser.username,
-        classIds: exam.classIds ? [...exam.classIds] : [],
-        durationMinutes: exam.durationMinutes,
+        classIds: targetExam.classIds ? [...targetExam.classIds] : [],
+        durationMinutes: targetExam.durationMinutes,
         totalScore: 1000,
         passingScore: 950,
         status: 'hidden', // Mặc định bản sao để tạm ẩn để admin rà soát
-        allowReviewAnswers: exam.allowReviewAnswers,
-        isPracticeTest: exam.isPracticeTest,
-        practiceRandomCount: exam.practiceRandomCount,
-        questions: exam.questions ? JSON.parse(JSON.stringify(exam.questions)) : [],
+        allowReviewAnswers: targetExam.allowReviewAnswers,
+        isPracticeTest: targetExam.isPracticeTest,
+        practiceRandomCount: targetExam.practiceRandomCount,
+        questions: targetExam.questions ? JSON.parse(JSON.stringify(targetExam.questions)) : [],
       });
       showToast(`Đã nhân bản đề thi thành "${clonedTitle}" thành công!`);
     } catch {
       showToast('Có lỗi xảy ra khi nhân bản đề thi.', 'error');
+    } finally {
+      setLoadingActionExamId(null);
     }
   };
 
@@ -1030,28 +1075,39 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                         {/* Làm thử đề thi (Test Exam) */}
                         <button
                           type="button"
-                          onClick={() => setExamToTest(exam)}
-                          className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
+                          disabled={loadingActionExamId === exam.id}
+                          onClick={() => handleTestExam(exam)}
+                          className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer disabled:opacity-50"
                           title="Làm thử đề thi (Chế độ quản trị viên kiểm thử)"
                         >
-                          <Play className="w-4 h-4" />
+                          {loadingActionExamId === exam.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin text-emerald-600" />
+                          ) : (
+                            <Play className="w-4 h-4" />
+                          )}
                         </button>
 
                         {/* Chỉnh sửa đề thi */}
                         <button
                           type="button"
+                          disabled={loadingEditExamId === exam.id}
                           onClick={() => handleOpenEditExam(exam)}
-                          className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors cursor-pointer disabled:opacity-50"
                           title="Chỉnh sửa đề thi, câu hỏi và cấu hình"
                         >
-                          <Edit2 className="w-4 h-4" />
+                          {loadingEditExamId === exam.id ? (
+                            <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                          ) : (
+                            <Edit2 className="w-4 h-4" />
+                          )}
                         </button>
 
                         {/* Nhân bản đề thi */}
                         <button
                           type="button"
+                          disabled={loadingActionExamId === exam.id}
                           onClick={() => handleCloneExam(exam)}
-                          className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-600 hover:text-purple-600 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-600 hover:text-purple-600 transition-colors cursor-pointer disabled:opacity-50"
                           title="Tạo bản sao (nhân bản) đề thi"
                         >
                           <Copy className="w-4 h-4" />
@@ -1060,8 +1116,9 @@ export const AdminExamsTab: React.FC<AdminExamsTabProps> = ({
                         {/* In đề thi */}
                         <button
                           type="button"
-                          onClick={() => setExamToPrint(exam)}
-                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                          disabled={loadingActionExamId === exam.id}
+                          onClick={() => handleOpenPrintExam(exam)}
+                          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer disabled:opacity-50"
                           title="In đề thi ra giấy A4 hoặc PDF"
                         >
                           <Printer className="w-4 h-4" />

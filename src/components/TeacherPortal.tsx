@@ -64,6 +64,7 @@ import {
   updateExam,
   deleteExam,
   mergeExams,
+  getExamWithQuestions,
   addExamSubmission,
   deleteExamSubmission,
   deleteMultipleExamSubmissions,
@@ -359,6 +360,9 @@ export const TeacherPortal: React.FC<TeacherPortalProps> = ({
   // Modal Quản lý đề thi (Tạo / Sửa)
   const [isExamModalOpen, setIsExamModalOpen] = useState(false);
   const [editingExamId, setEditingExamId] = useState<string | null>(null);
+  const [editingExamFull, setEditingExamFull] = useState<Exam | null>(null);
+  const [loadingEditExamId, setLoadingEditExamId] = useState<string | null>(null);
+  const [loadingTestingExamId, setLoadingTestingExamId] = useState<string | null>(null);
   const [examTitle, setExamTitle] = useState('');
   const [examSubject, setExamSubject] = useState(teacher.subjects || 'Công nghệ Thông tin');
   const [examDuration, setExamDuration] = useState<number>(45);
@@ -819,18 +823,44 @@ NOTIFY pgrst, 'reload schema';`;
     setIsExamModalOpen(true);
   };
 
-  const handleOpenEditExam = (exam: Exam) => {
-    setEditingExamId(exam.id);
-    setExamTitle(exam.title);
-    setExamSubject(exam.subject);
-    setExamDuration(exam.durationMinutes);
-    setExamStatus(exam.status);
-    setExamAllowReview(exam.allowReviewAnswers);
-    setExamSelectedClassIds(exam.classIds || []);
-    setExamIsPractice(!!exam.isPracticeTest);
-    setExamPracticeRandomCount(exam.practiceRandomCount || 10);
-    setExamQuestions(exam.questions || []);
-    setIsExamModalOpen(true);
+  const handleOpenEditExam = async (exam: Exam) => {
+    setLoadingEditExamId(exam.id);
+    try {
+      // Luôn luôn đọc đầy đủ câu hỏi trực tiếp từ CSDL Turso để đồng bộ đa máy
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      const targetExam = fullExam || exam;
+      setEditingExamFull(targetExam);
+      setEditingExamId(targetExam.id);
+      setExamTitle(targetExam.title);
+      setExamSubject(targetExam.subject);
+      setExamDuration(targetExam.durationMinutes);
+      setExamStatus(targetExam.status);
+      setExamAllowReview(targetExam.allowReviewAnswers);
+      setExamSelectedClassIds(targetExam.classIds || []);
+      setExamIsPractice(!!targetExam.isPracticeTest);
+      setExamPracticeRandomCount(targetExam.practiceRandomCount || 10);
+      setExamQuestions(targetExam.questions || []);
+      setIsExamModalOpen(true);
+    } catch (err) {
+      console.error('Lỗi nạp đề thi từ Turso:', err);
+      setEditingExamFull(exam);
+      setEditingExamId(exam.id);
+      setIsExamModalOpen(true);
+    } finally {
+      setLoadingEditExamId(null);
+    }
+  };
+
+  const handleTestExam = async (exam: Exam) => {
+    setLoadingTestingExamId(exam.id);
+    try {
+      const fullExam = await getExamWithQuestions(exam.id, true);
+      setTestingExam(fullExam || exam);
+    } catch {
+      setTestingExam(exam);
+    } finally {
+      setLoadingTestingExamId(null);
+    }
   };
 
   const handleSaveExam = async (e: React.FormEvent) => {
@@ -2397,22 +2427,32 @@ NOTIFY pgrst, 'reload schema';`;
                                   {/* Làm thử (Không tính giờ) */}
                                   <button
                                     type="button"
-                                    onClick={() => setTestingExam(ex)}
-                                    className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors border border-purple-200 shadow-2xs"
+                                    disabled={loadingTestingExamId === ex.id}
+                                    onClick={() => handleTestExam(ex)}
+                                    className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors border border-purple-200 shadow-2xs disabled:opacity-50"
                                     title="Giáo viên làm thử đề thi (Không tính thời gian)"
                                   >
-                                    <Play className="w-3.5 h-3.5" />
+                                    {loadingTestingExamId === ex.id ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                      <Play className="w-3.5 h-3.5" />
+                                    )}
                                     <span className="hidden sm:inline">Làm thử</span>
                                   </button>
 
                                   {/* Sửa */}
                                   <button
                                     type="button"
+                                    disabled={loadingEditExamId === ex.id}
                                     onClick={() => handleOpenEditExam(ex)}
-                                    className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition-colors border border-slate-200"
+                                    className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition-colors border border-slate-200 disabled:opacity-50"
                                     title="Chỉnh sửa đề thi và câu hỏi"
                                   >
-                                    <Edit3 className="w-3.5 h-3.5" />
+                                    {loadingEditExamId === ex.id ? (
+                                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                                    ) : (
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    )}
                                   </button>
 
                                   {/* Xóa */}
@@ -2540,22 +2580,32 @@ NOTIFY pgrst, 'reload schema';`;
                             {/* Giáo viên làm thử: KHÔNG TÍNH GIỜ */}
                             <button
                               type="button"
-                              onClick={() => setTestingExam(ex)}
-                              className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors border border-purple-200"
+                              disabled={loadingTestingExamId === ex.id}
+                              onClick={() => handleTestExam(ex)}
+                              className="px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs flex items-center gap-1 cursor-pointer transition-colors border border-purple-200 disabled:opacity-50"
                               title="Làm thử đề thi (Không tính thời gian)"
                             >
-                              <Play className="w-3.5 h-3.5" />
+                              {loadingTestingExamId === ex.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Play className="w-3.5 h-3.5" />
+                              )}
                               <span>Làm Thử</span>
                             </button>
 
                             <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
+                                disabled={loadingEditExamId === ex.id}
                                 onClick={() => handleOpenEditExam(ex)}
-                                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition-colors border border-slate-200"
+                                className="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center cursor-pointer transition-colors border border-slate-200 disabled:opacity-50"
                                 title="Chỉnh sửa đề thi & câu hỏi"
                               >
-                                <Edit3 className="w-3.5 h-3.5" />
+                                {loadingEditExamId === ex.id ? (
+                                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-indigo-600" />
+                                ) : (
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                )}
                               </button>
                               <button
                                 type="button"
@@ -3615,7 +3665,7 @@ NOTIFY pgrst, 'reload schema';`;
       {/* ================= MODAL: TẠO / SỬA ĐỀ THI VỚI 7 DẠNG CÂU HỎI (Requirement A.5) ================= */}
       {isExamModalOpen && (
         <ExamEditorModal
-          initialExam={editingExamId ? exams.find((e) => e.id === editingExamId) || null : null}
+          initialExam={editingExamFull || (editingExamId ? exams.find((e) => e.id === editingExamId) || null : null)}
           assignedClasses={assignedClasses}
           teacherId={teacher.id}
           teacherName={teacher.fullName || teacher.username}
@@ -3638,10 +3688,12 @@ NOTIFY pgrst, 'reload schema';`;
               }
             }
             setEditingExamId(null);
+            setEditingExamFull(null);
             setIsExamModalOpen(false);
           }}
           onClose={() => {
             setEditingExamId(null);
+            setEditingExamFull(null);
             setIsExamModalOpen(false);
           }}
         />
