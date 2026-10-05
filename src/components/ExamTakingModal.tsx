@@ -1375,6 +1375,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       {submissionResult && isReviewingInline && (
         <ExamReviewModal
           submission={submissionResult}
+          isStudent={!isTeacherTesting}
           onClose={() => setIsReviewingInline(false)}
           exam={exam}
           isRequiredPassEnforced={!isRequirementMet}

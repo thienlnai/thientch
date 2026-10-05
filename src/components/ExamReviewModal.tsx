@@ -1,6 +1,6 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
-import { getExamWithQuestions } from '../services/dbService.ts';
+import { getExamWithQuestions, reportExamViolation } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
 import { getExamPassCycleStats } from '../utils/studentHelper.ts';
@@ -34,6 +34,7 @@ interface ExamReviewModalProps {
   onRetakeExam?: () => void;
   requiredPassCount?: number;
   passedAttemptsCount?: number;
+  isStudent?: boolean;
 }
 
 export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
@@ -47,6 +48,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
   onRetakeExam,
   requiredPassCount = 1,
   passedAttemptsCount = 0,
+  isStudent,
 }) => {
   const [submission, setSubmission] = useState<ExamSubmission>(initialSubmission);
 
@@ -183,18 +185,237 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     return passedAttemptsCount;
   }, [cycleStats, submission.isPassed, passedAttemptsCount, targetReqPass]);
 
-  // Ngăn chặn phím ESC thoát xem lại nếu đang bắt buộc làm đạt đủ số lần
+  // Quyền học sinh: Mặc định là học sinh nếu không có quyền xóa onDelete hoặc isStudent được truyền vào
+  const isStudentUser = isStudent !== undefined ? isStudent : !onDelete;
+
+  // Cảnh báo vi phạm phím tắt & an ninh phòng thi cho học sinh
+  const [violationCount, setViolationCount] = useState<number>(submission.violationCount || 0);
+  const [currentViolationReason, setCurrentViolationReason] = useState<string>('');
+  const [showViolationWarning, setShowViolationWarning] = useState<boolean>(false);
+  const lastViolationTimeRef = useRef<number>(0);
+
+  // Đồng bộ lại violationCount khi submission thay đổi
   useEffect(() => {
-    if (!isEnforced) return;
+    if (typeof submission.violationCount === 'number') {
+      setViolationCount(submission.violationCount);
+    }
+  }, [submission.violationCount]);
+
+  // Ghi nhận vi phạm và hiển thị modal cảnh báo bắt buộc quay lại
+  const recordReviewViolation = useCallback((type: string, label: string) => {
+    if (!isStudentUser) return;
+
+    // Chống spam trigger trong 1 giây (ví dụ vừa bấm phím vừa blur)
+    const now = Date.now();
+    if (now - lastViolationTimeRef.current < 1000) return;
+    lastViolationTimeRef.current = now;
+
+    const timeStr = new Date().toLocaleTimeString('vi-VN');
+    const logItem = {
+      id: `v_rev_${now}_${Math.random().toString(36).slice(2, 6)}`,
+      time: timeStr,
+      type,
+      label,
+    };
+
+    setViolationCount((prev) => prev + 1);
+    setCurrentViolationReason(label);
+    setShowViolationWarning(true);
+
+    setSubmission((prev) => ({
+      ...prev,
+      violationCount: (prev.violationCount || 0) + 1,
+      violationLogs: [...(prev.violationLogs || []), logItem],
+    }));
+
+    if (submission.id) {
+      reportExamViolation(submission.id, { type, label, time: timeStr });
+    }
+  }, [isStudentUser, submission.id]);
+
+  const handleDismissViolationWarning = useCallback(() => {
+    setShowViolationWarning(false);
+    try {
+      window.focus();
+    } catch {}
+  }, []);
+
+  // Thiết lập giám sát chống gian lận trong màn hình xem lại đáp án
+  useEffect(() => {
+    if (!isStudentUser) return;
+
+    // 1. Chặn menu chuột phải
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      recordReviewViolation('contextmenu', 'Nhấn chuột phải trong màn hình xem lại đáp án');
+      return false;
+    };
+
+    // 2. Chặn bôi đen quét khối
+    const handleSelectStart = (e: Event) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // 3. Chặn các phím tắt hệ thống: Win+D, Alt+Tab, F12, F11, Windows key, ESC, Alt+F4, v.v.
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' || e.code === 'Escape') {
+      const keyLower = e.key ? e.key.toLowerCase() : '';
+      const code = e.code || '';
+
+      // a. Chặn phím Escape (ESC) nếu đang bắt buộc làm đạt hoặc đang hiển thị cảnh báo
+      if (e.key === 'Escape' || code === 'Escape') {
+        if (isEnforced || showViolationWarning) {
+          e.preventDefault();
+          e.stopPropagation();
+          recordReviewViolation('escape', 'Nhấn phím ESC để thoát màn hình xem lại');
+          return false;
+        }
+      }
+
+      // b. Chặn Windows + D (Thu nhỏ ra Desktop)
+      if (e.metaKey && (keyLower === 'd' || code === 'KeyD')) {
         e.preventDefault();
         e.stopPropagation();
+        recordReviewViolation('win_d', 'Tổ hợp phím thu nhỏ về Desktop (Windows + D)');
+        return false;
+      }
+
+      // c. Chặn Alt + Tab (Chuyển cửa sổ ứng dụng)
+      if (e.altKey && (keyLower === 'tab' || e.key === 'Tab' || code === 'Tab')) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('alt_tab', 'Tổ hợp phím chuyển cửa sổ Alt+Tab');
+        return false;
+      }
+
+      // d. Chặn F12 (DevTools)
+      if (e.key === 'F12' || code === 'F12') {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('f12', 'Nhấn phím F12 (Công cụ kiểm tra DevTools)');
+        return false;
+      }
+
+      // e. Chặn F11 (Toàn màn hình)
+      if (e.key === 'F11' || code === 'F11') {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('f11', 'Nhấn phím F11 (Phóng to / thu nhỏ)');
+        return false;
+      }
+
+      // f. Chặn phím Windows (Start Menu)
+      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight') {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('windows_key', 'Nhấn phím Windows (Start Menu)');
+        return false;
+      }
+
+      // g. Chặn Ctrl + Escape (Mở Start Menu)
+      if (e.ctrlKey && (e.key === 'Escape' || code === 'Escape')) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('ctrl_esc', 'Tổ hợp phím Ctrl + ESC');
+        return false;
+      }
+
+      // h. Chặn Alt + F4 (Đóng ứng dụng)
+      if (e.altKey && (e.key === 'F4' || code === 'F4')) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('alt_f4', 'Tổ hợp phím đóng ứng dụng Alt+F4');
+        return false;
+      }
+
+      // i. Chặn Ctrl+Shift+I / J / C (DevTools)
+      if (e.ctrlKey && e.shiftKey && ['i', 'c', 'j'].includes(keyLower)) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('devtools', 'Phím tắt mở DevTools (Ctrl+Shift+I/J/C)');
+        return false;
+      }
+
+      // j. Chặn Ctrl+U (Xem mã nguồn)
+      if (e.ctrlKey && keyLower === 'u') {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('view_source', 'Phím tắt xem mã nguồn bài thi (Ctrl+U)');
+        return false;
+      }
+
+      // k. Chặn F5 và Ctrl+R (Tải lại trang)
+      if (e.key === 'F5' || (e.ctrlKey && keyLower === 'r')) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('reload', 'Phím tải lại trang (F5 / Ctrl+R)');
+        return false;
+      }
+
+      // l. Chặn Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+F, Ctrl+P, Ctrl+S
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        ['c', 'v', 'x', 'a', 'f', 'p', 's'].includes(keyLower)
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('shortcut', `Phím tắt thao tác cấm (${e.ctrlKey ? 'Ctrl' : 'Cmd'}+${keyLower.toUpperCase()})`);
+        return false;
       }
     };
+
+    // 4. Chặn sự kiện sao chép / dán
+    const handleClipboard = (e: ClipboardEvent) => {
+      e.preventDefault();
+      recordReviewViolation('clipboard', 'Cố ý sao chép nội dung câu hỏi/đáp án');
+      return false;
+    };
+
+    // 5. Phát hiện chuyển tab hoặc thu nhỏ cửa sổ (Win+D, Alt+Tab)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        recordReviewViolation('visibility', 'Rời khỏi màn hình xem lại đáp án (chuyển tab hoặc thu nhỏ Win+D)');
+      }
+    };
+
+    const handleWindowBlur = () => {
+      recordReviewViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / Alt+Tab / Win+D)');
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      const code = e.code || '';
+      if (
+        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' ||
+        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight'
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+    };
+
+    window.addEventListener('contextmenu', handleContextMenu);
+    window.addEventListener('selectstart', handleSelectStart);
     window.addEventListener('keydown', handleKeyDown, true);
-    return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [isEnforced]);
+    window.addEventListener('keyup', handleKeyUp, true);
+    window.addEventListener('copy', handleClipboard);
+    window.addEventListener('paste', handleClipboard);
+    window.addEventListener('cut', handleClipboard);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      window.removeEventListener('contextmenu', handleContextMenu);
+      window.removeEventListener('selectstart', handleSelectStart);
+      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+      window.removeEventListener('copy', handleClipboard);
+      window.removeEventListener('paste', handleClipboard);
+      window.removeEventListener('cut', handleClipboard);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [isStudentUser, isEnforced, showViolationWarning, recordReviewViolation]);
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
@@ -1464,6 +1685,68 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         title={lightboxImage?.title}
         onClose={handleCloseLightbox}
       />
+
+      {/* ================= MODAL CẢNH BÁO VI PHẠM AN NINH PHÒNG THI ================= */}
+      {showViolationWarning && isStudentUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in zoom-in-95">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-6 sm:p-7 text-slate-900 border-2 border-red-500 relative overflow-hidden">
+            {/* Top red warning stripe */}
+            <div className="absolute top-0 left-0 right-0 h-2 bg-red-600" />
+
+            <div className="w-16 h-16 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 border border-red-200 shadow-xs">
+              <ShieldAlert className="w-9 h-9 animate-pulse" />
+            </div>
+
+            <div className="text-center">
+              <span className="inline-block px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-red-100 text-red-700 border border-red-200 mb-2">
+                Hệ Thống Giám Sát Phòng Thi
+              </span>
+              <h3 className="text-lg sm:text-xl font-black text-red-600 uppercase tracking-tight">
+                Cảnh Báo Vi Phạm Quy Chế Thi!
+              </h3>
+            </div>
+
+            {/* Chi tiết vi phạm */}
+            <div className="mt-4 p-3.5 bg-red-50/90 rounded-2xl border border-red-200 text-xs space-y-2">
+              <div className="flex items-start gap-2 text-red-900">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-red-800">Hành vi vi phạm vừa phát hiện:</span>
+                  <div className="font-mono text-red-700 font-semibold mt-0.5">
+                    {currentViolationReason || 'Phát hiện thao tác vi phạm quy chế xem lại bài thi'}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-red-200/80 flex items-center justify-between font-mono text-xs">
+                <span className="text-red-800 font-semibold">Tổng số lần vi phạm đã ghi nhận:</span>
+                <span className="px-2.5 py-0.5 rounded-full bg-red-600 text-white font-black text-sm">
+                  {violationCount} lần
+                </span>
+              </div>
+            </div>
+
+            {/* Thông báo nhắc nhở quan trọng */}
+            <div className="mt-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-1.5">
+              <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span>Yêu cầu tuân thủ kỷ luật phòng thi!</span>
+              </div>
+              <p className="text-slate-600 leading-relaxed">
+                Học sinh đang trong màn hình xem lại đáp án. Nghiêm cấm các thao tác: <strong>Win+D, Alt+Tab, F12, F11</strong>, chuyển tab hoặc mở ứng dụng khác. Mọi hành vi vi phạm đều được hệ thống ghi nhận tự động và gửi đến Giáo Viên quản lý.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleDismissViolationWarning}
+              className="mt-5 w-full py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>Bắt Buộc Quay Lại</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

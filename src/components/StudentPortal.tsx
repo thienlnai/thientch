@@ -933,6 +933,7 @@ export const StudentPortal: React.FC<StudentPortalProps> = ({
             allSubmissions={studentSubmissions}
             exams={exams}
             exam={targetExam}
+            isStudent={true}
             onClose={() => setReviewingSubmission(null)}
             onRetakeExam={() => {
               if (targetExam) {

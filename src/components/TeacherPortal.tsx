@@ -4006,6 +4006,7 @@ NOTIFY pgrst, 'reload schema';`;
           submission={submissionToReview}
           allSubmissions={submissions}
           exams={exams}
+          isStudent={false}
           onClose={() => setSubmissionToReview(null)}
           onDelete={(sub) => {
             setSubmissionToReview(null);
