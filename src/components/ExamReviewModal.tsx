@@ -262,7 +262,23 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
       const keyLower = e.key ? e.key.toLowerCase() : '';
       const code = e.code || '';
 
-      // a. Chặn phím Escape (ESC) nếu đang bắt buộc làm đạt hoặc đang hiển thị cảnh báo
+      // 1. Chặn triệt để phím Alt (kể cả bấm Alt đơn lẻ hay tổ hợp Alt+Tab / Alt+F4)
+      if (e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight' || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('alt_key', 'Phát hiện bấm phím Alt (Cấm sử dụng Alt / Alt+Tab chuyển màn hình)');
+        return false;
+      }
+
+      // 2. Chặn triệt để phím Windows (kể cả bấm phím Win đơn lẻ hay tổ hợp Win+D / Win+Tab)
+      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordReviewViolation('win_key', 'Phát hiện bấm phím Windows (Cấm sử dụng phím Win / Win+D)');
+        return false;
+      }
+
+      // 3. Chặn phím Escape (ESC) nếu đang bắt buộc làm đạt hoặc đang hiển thị cảnh báo
       if (e.key === 'Escape' || code === 'Escape') {
         if (isEnforced || showViolationWarning) {
           e.preventDefault();
@@ -272,23 +288,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         }
       }
 
-      // b. Chặn Windows + D (Thu nhỏ ra Desktop)
-      if (e.metaKey && (keyLower === 'd' || code === 'KeyD')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordReviewViolation('win_d', 'Tổ hợp phím thu nhỏ về Desktop (Windows + D)');
-        return false;
-      }
-
-      // c. Chặn Alt + Tab (Chuyển cửa sổ ứng dụng)
-      if (e.altKey && (keyLower === 'tab' || e.key === 'Tab' || code === 'Tab')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordReviewViolation('alt_tab', 'Tổ hợp phím chuyển cửa sổ Alt+Tab');
-        return false;
-      }
-
-      // d. Chặn F12 (DevTools)
+      // 4. Chặn F12 (DevTools)
       if (e.key === 'F12' || code === 'F12') {
         e.preventDefault();
         e.stopPropagation();
@@ -296,7 +296,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         return false;
       }
 
-      // e. Chặn F11 (Toàn màn hình)
+      // 5. Chặn F11 (Toàn màn hình)
       if (e.key === 'F11' || code === 'F11') {
         e.preventDefault();
         e.stopPropagation();
@@ -304,15 +304,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         return false;
       }
 
-      // f. Chặn phím Windows (Start Menu)
-      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight') {
-        e.preventDefault();
-        e.stopPropagation();
-        recordReviewViolation('windows_key', 'Nhấn phím Windows (Start Menu)');
-        return false;
-      }
-
-      // g. Chặn Ctrl + Escape (Mở Start Menu)
+      // 6. Chặn Ctrl + Escape (Mở Start Menu)
       if (e.ctrlKey && (e.key === 'Escape' || code === 'Escape')) {
         e.preventDefault();
         e.stopPropagation();

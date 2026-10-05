@@ -10,7 +10,7 @@ import {
   shuffleExamQuestionsAndOptions, 
   calculateExamScore 
 } from '../utils/studentHelper.ts';
-import { autoSaveExamDraft } from '../services/dbService.ts';
+import { autoSaveExamDraft, reportExamViolation } from '../services/dbService.ts';
 import { useExamSecurity } from '../hooks/useExamSecurity.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
@@ -183,6 +183,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   };
 
   const handleFinishAndClose = () => {
+    isExitedRef.current = true;
     if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
       try {
         (navigator as any).keyboard.unlock();
@@ -269,6 +270,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const lastViolationTimeRef = useRef<number>(0);
   const startTimeRef = useRef<number>(Date.now());
   const isFinishedRef = useRef<boolean>(false);
+  const isExitedRef = useRef<boolean>(false);
 
   // Drag and Drop & Matching state
   const [draggedLeftPairId, setDraggedLeftPairId] = useState<string | null>(null);
@@ -314,9 +316,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const currentQ = shuffledQuestions[currentIndex];
   const totalQuestions = shuffledQuestions.length;
 
-  // Ghi nhận vi phạm quy chế thi (chuột phải, F12, rời màn hình, phím tắt cấm...)
+  // Ghi nhận vi phạm quy chế thi (chuột phải, F12, rời màn hình, phím tắt cấm Alt, Win...)
   const recordViolation = (type: string, label: string) => {
-    if (isTeacherTesting || isFinishedRef.current) return;
+    // Giáo viên làm thử hoặc học sinh đã bấm hoàn tất đóng modal thì không ghi nhận
+    if (isTeacherTesting || isExitedRef.current) return;
 
     // Chống duplicate trigger liên tục trong 1 giây (ví dụ chuyển tab vừa kích hoạt blur vừa kích hoạt visibilitychange)
     const now = Date.now();
@@ -335,6 +338,21 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     setViolationLogs((prev) => [...prev, logItem]);
     setCurrentViolationReason(label);
     setShowViolationWarning(true);
+
+    // Cập nhật cả vào submissionResult và gửi CSDL nếu đang ở màn hình hiển thị điểm số vừa nộp
+    if (submissionResult) {
+      setSubmissionResult((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          violationCount: (prev.violationCount || 0) + 1,
+          violationLogs: [...(prev.violationLogs || []), logItem],
+        };
+      });
+      if (submissionResult.id) {
+        reportExamViolation(submissionResult.id, { type, label, time: timeStr });
+      }
+    }
   };
 
   // Hook bảo mật phòng thi (ghi nhận vi phạm cục bộ, không khóa cứng màn hình)
@@ -451,12 +469,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       return false;
     };
 
-    // c. Chặn các phím tắt hệ thống: Alt+F4, Alt+Tab, Windows+D, Windows key, ESC, F11, F12, Ctrl+U, v.v.
+    // c. Chặn các phím tắt hệ thống: Alt, Win, Alt+F4, Alt+Tab, Windows+D, ESC, F11, F12, Ctrl+U, v.v.
     const handleKeyDown = (e: KeyboardEvent) => {
       const keyLower = e.key ? e.key.toLowerCase() : '';
       const code = e.code || '';
 
-      // 1. Chặn phím Escape (ESC)
+      // 1. CHẶN TRIỆT ĐỂ PHÍM ALT (kể cả bấm Alt đơn lẻ hay tổ hợp Alt+Tab / Alt+F4)
+      if (e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight' || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordViolation('alt_key', 'Phát hiện bấm phím Alt (Cấm sử dụng Alt / Alt+Tab chuyển màn hình)');
+        return false;
+      }
+
+      // 2. CHẶN TRIỆT ĐỂ PHÍM WINDOWS (kể cả bấm Win đơn lẻ hay tổ hợp Win+D / Win+Tab)
+      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordViolation('win_key', 'Phát hiện bấm phím Windows (Cấm sử dụng phím Win / Win+D)');
+        return false;
+      }
+
+      // 3. Chặn phím Escape (ESC)
       if (e.key === 'Escape' || code === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
@@ -464,47 +498,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         return false;
       }
 
-      // 2. Chặn Alt + F4 (Đóng cửa sổ / ứng dụng)
-      if (e.altKey && (e.key === 'F4' || code === 'F4')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordViolation('alt_f4', 'Tổ hợp phím đóng ứng dụng Alt+F4');
-        return false;
-      }
-
-      // 3. Chặn Alt + Tab (Chuyển cửa sổ ứng dụng)
-      if (e.altKey && (keyLower === 'tab' || e.key === 'Tab' || code === 'Tab')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordViolation('alt_tab', 'Tổ hợp phím chuyển cửa sổ Alt+Tab');
-        return false;
-      }
-
-      // 4. Chặn Windows + D (Thu nhỏ ra Desktop)
-      if (e.metaKey && (keyLower === 'd' || code === 'KeyD')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordViolation('win_d', 'Tổ hợp phím thu nhỏ về Desktop (Windows + D)');
-        return false;
-      }
-
-      // 5. Chặn phím Windows đơn lẻ (Meta / OS key)
-      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight') {
-        e.preventDefault();
-        e.stopPropagation();
-        recordViolation('windows_key', 'Nhấn phím Windows (Start Menu)');
-        return false;
-      }
-
-      // 6. Chặn Ctrl + Escape (Mở Start Menu)
-      if (e.ctrlKey && (e.key === 'Escape' || code === 'Escape')) {
-        e.preventDefault();
-        e.stopPropagation();
-        recordViolation('ctrl_esc', 'Tổ hợp phím Ctrl + ESC');
-        return false;
-      }
-
-      // 7. Chặn F11 (Phóng to / thu nhỏ toàn màn hình)
+      // 4. Chặn F11 (Phóng to / thu nhỏ toàn màn hình)
       if (e.key === 'F11' || code === 'F11') {
         e.preventDefault();
         e.stopPropagation();
@@ -512,7 +506,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         return false;
       }
 
-      // 8. Chặn F5 và Ctrl+R (Tải lại trang)
+      // 5. Chặn F5 và Ctrl+R (Tải lại trang)
       if (e.key === 'F5' || (e.ctrlKey && keyLower === 'r')) {
         e.preventDefault();
         e.stopPropagation();
@@ -520,28 +514,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         return false;
       }
 
-      // 9. Phím F12 (DevTools)
+      // 6. Phím F12 (DevTools)
       if (e.key === 'F12' || code === 'F12') {
         e.preventDefault();
         recordViolation('f12', 'Nhấn phím F12 (Công cụ kiểm tra DevTools)');
         return false;
       }
 
-      // 10. Ctrl+Shift+I / J / C (DevTools)
+      // 7. Ctrl+Shift+I / J / C (DevTools)
       if (e.ctrlKey && e.shiftKey && ['i', 'c', 'j'].includes(keyLower)) {
         e.preventDefault();
         recordViolation('devtools', 'Phím tắt mở DevTools / Kiểm tra mã nguồn (Ctrl+Shift+I/J/C)');
         return false;
       }
 
-      // 11. Ctrl+U (Xem mã nguồn)
+      // 8. Ctrl+U (Xem mã nguồn)
       if (e.ctrlKey && keyLower === 'u') {
         e.preventDefault();
         recordViolation('view_source', 'Phím tắt xem mã nguồn bài thi (Ctrl+U)');
         return false;
       }
 
-      // 12. Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+F, Ctrl+P, Cmd+C, Cmd+V
+      // 9. Ctrl+C, Ctrl+V, Ctrl+X, Ctrl+A, Ctrl+F, Ctrl+P, Cmd+C, Cmd+V
       if (
         (e.ctrlKey || e.metaKey) &&
         ['c', 'v', 'x', 'a', 'f', 'p'].includes(keyLower)
@@ -561,22 +555,22 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
 
     // e. Phát hiện rời khỏi màn hình bài thi (chuyển tab, thu nhỏ cửa sổ, mở app khác)
     const handleVisibilityChange = () => {
-      if (document.hidden && !isFinishedRef.current) {
+      if (document.hidden && !isExitedRef.current) {
         recordViolation('visibility', 'Rời khỏi màn hình bài thi (chuyển tab trình duyệt hoặc ẩn cửa sổ)');
       }
     };
 
     const handleWindowBlur = () => {
-      if (!isFinishedRef.current) {
-        recordViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác)');
+      if (!isExitedRef.current) {
+        recordViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / Alt+Tab / Win+D)');
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code || '';
       if (
-        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' ||
-        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight'
+        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' || e.metaKey ||
+        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight' || e.altKey
       ) {
         e.preventDefault();
         e.stopPropagation();
@@ -1058,7 +1052,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
 
       {/* ================= MODAL CẢNH BÁO VI PHẠM AN NINH PHÒNG THI ================= */}
       {showViolationWarning && !isTeacherTesting && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-in zoom-in-95">
           <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-6 sm:p-7 text-slate-900 border-2 border-red-500 relative overflow-hidden">
             {/* Top red warning stripe */}
             <div className="absolute top-0 left-0 right-0 h-2 bg-red-600" />
@@ -1100,19 +1094,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
             <div className="mt-4 p-3.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-700 space-y-1.5">
               <div className="font-bold text-slate-900 flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span>Bài thi KHÔNG tự động nộp bài!</span>
+                <span>Yêu cầu tuân thủ kỷ luật phòng thi!</span>
               </div>
               <p className="text-slate-600 leading-relaxed">
-                Bạn vẫn có thể tiếp tục làm bài thi bình thường. Tuy nhiên, <strong>toàn bộ số lần và chi tiết vi phạm</strong> (chuột phải, F12, rời màn hình...) đã được hệ thống lưu lại và <strong>sẽ hiển thị trực tiếp cho Giáo Viên xem</strong> khi chấm thi để đánh giá.
+                {submissionResult
+                  ? 'Học sinh đang ở màn hình kết quả điểm số bài thi. Nghiêm cấm các thao tác: phím Alt, phím Win (Windows), Alt+Tab, Win+D, F12, F11 hoặc chuyển ứng dụng khác. Mọi vi phạm đều được hệ thống ghi nhận và báo cáo cho Giáo Viên.'
+                  : 'Học sinh đang làm bài thi. Nghiêm cấm bấm phím Alt, phím Win (Windows), Alt+Tab, Win+D, F12, F11 hoặc rời màn hình thi. Toàn bộ vi phạm đều được hệ thống lưu lại và hiển thị trực tiếp cho Giáo Viên xem.'}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() => setShowViolationWarning(false)}
-              className="mt-5 w-full py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+              onClick={() => {
+                setShowViolationWarning(false);
+                try {
+                  window.focus();
+                } catch {}
+              }}
+              className="mt-5 w-full py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <span>Tôi Đã Hiểu & Tiếp Tục Làm Bài</span>
+              <span>Bắt Buộc Quay Lại</span>
             </button>
           </div>
         </div>

@@ -133,8 +133,26 @@ export function useExamSecurity({
       return false;
     };
 
-    // Chặn phím tắt (F12, DevTools, Ctrl+Shift+I, Ctrl+C, Ctrl+V, Alt+Tab, v.v.)
+    // Chặn phím tắt (Alt, Win, F12, DevTools, Ctrl+Shift+I, Ctrl+C, Ctrl+V, Alt+Tab, v.v.)
     const handleKeyDown = (e: KeyboardEvent) => {
+      const code = e.code || '';
+
+      // 1. Chặn phím Alt ngay lập tức
+      if (e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight' || e.altKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordViolation('alt_key', 'Phát hiện bấm phím Alt (Cấm sử dụng Alt / Alt+Tab chuyển màn hình)');
+        return false;
+      }
+
+      // 2. Chặn phím Windows ngay lập tức
+      if (e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' || e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        recordViolation('win_key', 'Phát hiện bấm phím Windows (Cấm sử dụng phím Win / Win+D)');
+        return false;
+      }
+
       if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C'))) {
         e.preventDefault();
         e.stopPropagation();
