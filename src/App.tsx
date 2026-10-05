@@ -28,6 +28,7 @@ import { LoginPage } from './components/LoginPage.tsx';
 import { AdminPortal } from './components/AdminPortal.tsx';
 import { TeacherPortal } from './components/TeacherPortal.tsx';
 import { StudentPortal } from './components/StudentPortal.tsx';
+import { TopEdgeSecurityGuard } from './components/TopEdgeSecurityGuard.tsx';
 
 export default function App() {
   const [lang, setLang] = useState<Language>('vi');
@@ -117,33 +118,39 @@ export default function App() {
   // Render Portals based on Role
   if (currentUserRole === 'admin' && currentUserData) {
     return (
-      <AdminPortal
-        currentUser={currentUserData as UserAccount}
-        onLogout={handleLogout}
-        lang={lang}
-        schools={schools}
-        classes={classes}
-        students={students}
-        users={users}
-        exams={exams}
-        submissions={submissions}
-        isLiveSync={isLiveSync}
-      />
+      <>
+        <TopEdgeSecurityGuard />
+        <AdminPortal
+          currentUser={currentUserData as UserAccount}
+          onLogout={handleLogout}
+          lang={lang}
+          schools={schools}
+          classes={classes}
+          students={students}
+          users={users}
+          exams={exams}
+          submissions={submissions}
+          isLiveSync={isLiveSync}
+        />
+      </>
     );
   }
 
   if (currentUserRole === 'teacher' && currentUserData) {
     return (
-      <TeacherPortal
-        teacher={currentUserData as UserAccount}
-        classes={classes}
-        students={students}
-        schools={schools}
-        exams={exams}
-        submissions={submissions}
-        onLogout={handleLogout}
-        lang={lang}
-      />
+      <>
+        <TopEdgeSecurityGuard />
+        <TeacherPortal
+          teacher={currentUserData as UserAccount}
+          classes={classes}
+          students={students}
+          schools={schools}
+          exams={exams}
+          submissions={submissions}
+          onLogout={handleLogout}
+          lang={lang}
+        />
+      </>
     );
   }
 
@@ -153,27 +160,33 @@ export default function App() {
     const currentClass = classes.find((c) => c.id === student.classId);
 
     return (
-      <StudentPortal
-        student={student}
-        school={currentSchool}
-        studentClass={currentClass}
-        exams={exams}
-        submissions={submissions}
-        teachers={users.filter((u) => u.role === 'teacher')}
-        onLogout={handleLogout}
-        lang={lang}
-      />
+      <>
+        <TopEdgeSecurityGuard />
+        <StudentPortal
+          student={student}
+          school={currentSchool}
+          studentClass={currentClass}
+          exams={exams}
+          submissions={submissions}
+          teachers={users.filter((u) => u.role === 'teacher')}
+          onLogout={handleLogout}
+          lang={lang}
+        />
+      </>
     );
   }
 
   // Default: Show Login Page
   return (
-    <LoginPage
-      students={students}
-      users={users}
-      onLoginSuccess={handleLoginSuccess}
-      lang={lang}
-      onLanguageChange={(newLang) => setLang(newLang)}
-    />
+    <>
+      <TopEdgeSecurityGuard />
+      <LoginPage
+        students={students}
+        users={users}
+        onLoginSuccess={handleLoginSuccess}
+        lang={lang}
+        onLanguageChange={(newLang) => setLang(newLang)}
+      />
+    </>
   );
 }

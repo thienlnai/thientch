@@ -51,7 +51,7 @@ export function useExamSecurity({
       const el = document.documentElement as any;
       const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
       if (req) {
-        await req.call(el);
+        await req.call(el, { navigationUI: 'hide' });
       }
     } catch {}
   }, []);

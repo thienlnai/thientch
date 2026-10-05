@@ -15,6 +15,7 @@ import { useExamSecurity } from '../hooks/useExamSecurity.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
 import { ExamReviewModal } from './ExamReviewModal.tsx';
+import { TopEdgeSecurityGuard } from './TopEdgeSecurityGuard.tsx';
 import { ThientchLogo } from './ThientchLogo.tsx';
 import confetti from 'canvas-confetti';
 import { 
@@ -399,7 +400,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
         const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
         if (req) {
-          await req.call(el);
+          await req.call(el, { navigationUI: 'hide' });
         }
       }
       const isFull = !!document.fullscreenElement || !!(document as any).webkitFullscreenElement;
@@ -1011,17 +1012,7 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       }}
     >
       {/* VÙNG CHẮN BẢO VỆ CẠNH TRÊN: Ngăn chặn di chuột lên mép trên làm hiện nút X / thanh thoát toàn màn hình của trình duyệt */}
-      <div 
-        className="fixed top-0 left-0 right-0 h-3 z-9999 pointer-events-auto bg-transparent select-none cursor-default"
-        onMouseEnter={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-        onMouseMove={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      />
+      <TopEdgeSecurityGuard />
 
       {/* ================= MODAL BẮT BUỘC TOÀN MÀN HÌNH ĐỂ ẨN THANH CÔNG CỤ TRÌNH DUYỆT ================= */}
       {!isFullscreen && !isTeacherTesting && (

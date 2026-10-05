@@ -3,6 +3,7 @@ import { ExamSubmission, Exam, ExamQuestion } from '../types/index.ts';
 import { getExamWithQuestions, reportExamViolation } from '../services/dbService.ts';
 import { HotspotCanvas } from './HotspotCanvas.tsx';
 import { ImageLightboxModal } from './ImageLightboxModal.tsx';
+import { TopEdgeSecurityGuard } from './TopEdgeSecurityGuard.tsx';
 import { getExamPassCycleStats } from '../utils/studentHelper.ts';
 import { 
   X, 
@@ -240,7 +241,7 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
       if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
         const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
         if (req) {
-          await req.call(el);
+          await req.call(el, { navigationUI: 'hide' });
         }
       }
       if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
@@ -507,6 +508,9 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-0 sm:p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-200">
+      {/* VÙNG CHẮN BẢO VỆ CẠNH TRÊN: Ngăn chặn di chuột lên mép trên làm hiện nút X / thanh thoát toàn màn hình của trình duyệt */}
+      <TopEdgeSecurityGuard />
+
       <div className="w-full max-w-5xl h-[100dvh] sm:h-[92vh] bg-white rounded-none sm:rounded-3xl shadow-2xl shadow-indigo-950/15 flex flex-col overflow-hidden border-0 sm:border border-slate-200/90">
         
         {/* ================= HEADER TÔNG SÁNG CAO CẤP (TỐI ƯU TOÀN DIỆN CHO CẢ ĐIỆN THOẠI DỌC & MÁY TÍNH) ================= */}
