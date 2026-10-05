@@ -402,14 +402,19 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
           await req.call(el);
         }
       }
-      setIsFullscreen(true);
+      const isFull = !!document.fullscreenElement || !!(document as any).webkitFullscreenElement;
+      setIsFullscreen(isFull);
 
       // Khóa các phím hệ thống nguy hiểm qua Keyboard Lock API (Chromium / Chrome / Edge / Cốc Cốc)
       if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
         try {
-          await (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS);
+          await (navigator as any).keyboard.lock();
         } catch {
-          // Bỏ qua nếu môi trường không cấp quyền keyboard lock
+          try {
+            await (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS);
+          } catch {
+            // Bỏ qua nếu môi trường không cấp quyền keyboard lock
+          }
         }
       }
     } catch (err) {
@@ -487,6 +492,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
         e.preventDefault();
         e.stopPropagation();
         recordViolation('win_key', 'Phát hiện bấm phím Windows (Cấm sử dụng phím Win / Win+D)');
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 10);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 50);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 150);
         return false;
       }
 
@@ -562,7 +589,29 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
 
     const handleWindowBlur = () => {
       if (!isExitedRef.current) {
-        recordViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / Alt+Tab / Win+D)');
+        recordViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / phím Win / Alt+Tab)');
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 15);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 60);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 150);
       }
     };
 
@@ -574,6 +623,28 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       ) {
         e.preventDefault();
         e.stopPropagation();
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 10);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 50);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 150);
         return false;
       }
     };
@@ -827,10 +898,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
     setIsSubmitting(true);
     isFinishedRef.current = true;
 
-    // Mở khóa bàn phím (Vẫn GIỮ NGUYÊN Fullscreen theo Requirement 4 cho tới khi bấm Hoàn Tất & Đóng)
-    if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
+    // Giữ nguyên khóa bàn phím & Fullscreen qua màn hình điểm số cho tới khi học sinh bấm Hoàn Tất & Đóng
+    if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
       try {
-        (navigator as any).keyboard.unlock();
+        (navigator as any).keyboard.lock().catch(() => {
+          (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS).catch(() => {});
+        });
       } catch {}
     }
 
@@ -897,10 +970,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
       setShowConfirmSubmit(false);
       isFinishedRef.current = true;
 
-      // Nhả khóa bàn phím (vẫn GIỮ NGUYÊN Toàn Màn Hình theo Requirement 4 cho tới khi học sinh bấm "Hoàn Tất & Đóng")
-      if ('keyboard' in navigator && (navigator as any).keyboard?.unlock) {
+      // Giữ nguyên khóa bàn phím & Fullscreen qua màn hình điểm số cho tới khi học sinh bấm "Hoàn Tất & Đóng"
+      if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
         try {
-          (navigator as any).keyboard.unlock();
+          (navigator as any).keyboard.lock().catch(() => {
+            (navigator as any).keyboard.lock(SYSTEM_LOCKED_KEYS).catch(() => {});
+          });
         } catch {}
       }
     } catch (err: any) {
@@ -1105,10 +1180,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
 
             <button
               type="button"
-              onClick={() => {
+              onClick={async () => {
                 setShowViolationWarning(false);
                 try {
                   window.focus();
+                  document.body.focus();
+                  await enterFullscreen();
                 } catch {}
               }}
               className="mt-5 w-full py-3.5 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-red-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"

@@ -233,12 +233,42 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     }
   }, [isStudentUser, submission.id]);
 
-  const handleDismissViolationWarning = useCallback(() => {
+  const enterReviewFullscreen = useCallback(async () => {
+    if (!isStudentUser) return;
+    try {
+      const el = document.documentElement as any;
+      if (!document.fullscreenElement && !(document as any).webkitFullscreenElement) {
+        const req = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (req) {
+          await req.call(el);
+        }
+      }
+      if ('keyboard' in navigator && (navigator as any).keyboard?.lock) {
+        try {
+          await (navigator as any).keyboard.lock();
+        } catch {
+          try {
+            await (navigator as any).keyboard.lock([
+              'Escape', 'AltLeft', 'AltRight', 'Tab', 'MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'F11', 'F12'
+            ]);
+          } catch {}
+        }
+      }
+    } catch {}
+  }, [isStudentUser]);
+
+  useEffect(() => {
+    enterReviewFullscreen();
+  }, [enterReviewFullscreen]);
+
+  const handleDismissViolationWarning = useCallback(async () => {
     setShowViolationWarning(false);
     try {
       window.focus();
+      document.body.focus();
+      await enterReviewFullscreen();
     } catch {}
-  }, []);
+  }, [enterReviewFullscreen]);
 
   // Thiết lập giám sát chống gian lận trong màn hình xem lại đáp án
   useEffect(() => {
@@ -275,6 +305,28 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
         e.preventDefault();
         e.stopPropagation();
         recordReviewViolation('win_key', 'Phát hiện bấm phím Windows (Cấm sử dụng phím Win / Win+D)');
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 10);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 50);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 150);
         return false;
       }
 
@@ -371,17 +423,61 @@ export const ExamReviewModal: React.FC<ExamReviewModalProps> = ({
     };
 
     const handleWindowBlur = () => {
-      recordReviewViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / Alt+Tab / Win+D)');
+      recordReviewViolation('blur', 'Rời con trỏ khỏi cửa sổ bài thi (chuyển sang ứng dụng khác / phím Win / Alt+Tab)');
+      try {
+        window.focus();
+        document.body.focus();
+      } catch {}
+      setTimeout(() => {
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+      }, 15);
+      setTimeout(() => {
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+      }, 60);
+      setTimeout(() => {
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+      }, 150);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       const code = e.code || '';
       if (
-        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' ||
-        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight'
+        e.key === 'Meta' || e.key === 'OS' || code === 'MetaLeft' || code === 'MetaRight' || e.metaKey ||
+        e.key === 'Alt' || code === 'AltLeft' || code === 'AltRight' || e.altKey
       ) {
         e.preventDefault();
         e.stopPropagation();
+        try {
+          window.focus();
+          document.body.focus();
+        } catch {}
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 10);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 50);
+        setTimeout(() => {
+          try {
+            window.focus();
+            document.body.focus();
+          } catch {}
+        }, 150);
         return false;
       }
     };
